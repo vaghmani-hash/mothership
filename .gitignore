@@ -1,0 +1,11 @@
+node_modules/
+out/
+dist/
+.e2e-tmp/
+.DS_Store
+# Logo drafts and the image tool's logs stay local: only the icon script and the chosen logo ship.
+branding/*
+!branding/make-icon.py
+!branding/c-beam/
+branding/c-beam/*
+!branding/c-beam/logo.png

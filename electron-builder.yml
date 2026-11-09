@@ -1,0 +1,18 @@
+appId: local.mothership
+productName: Mothership
+directories:
+  output: dist
+files:
+  - out/**
+  - package.json
+asarUnpack:
+  - node_modules/node-pty/**
+mac:
+  target:
+    - target: dir
+      arch: arm64
+  category: public.app-category.developer-tools
+  # A local build for this Mac: not signed or notarised.
+  identity: null
+# Package from the Electron already in node_modules: no download needed.
+electronDist: node_modules/electron/dist
