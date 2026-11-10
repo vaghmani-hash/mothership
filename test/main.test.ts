@@ -2,7 +2,7 @@
 // browser, the name store, and sessions running a stand-in for claude in a real terminal.
 
 import { execFileSync } from 'node:child_process'
-import { mkdir, mkdtemp, readFile, readdir, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -12,7 +12,7 @@ import { EventInbox, writeHookFiles } from '../src/main/hooks'
 import type { HookEvent } from '../src/main/hooks'
 import { Sessions } from '../src/main/sessions'
 import { Store } from '../src/main/store'
-import { History } from '../src/main/transcripts'
+import { conversationFiles, History, isSessionId } from '../src/main/transcripts'
 import type { LiveSession } from '../src/shared/types'
 
 const temp = (): Promise<string> => mkdtemp(join(tmpdir(), 'cs-test-'))
@@ -91,6 +91,23 @@ describe('History', () => {
     ])
     expect(list[0]?.lastAt).toBe(Date.parse('2026-11-07T12:00:00.000Z'))
     expect((await history.list()).length).toBe(2)
+  })
+
+  it("finds a conversation's files to delete, and forgets a deleted one", async () => {
+    const dir = await temp()
+    const id = '44444444-4444-4444-8444-444444444444'
+    const folder = join(dir, '-w-mesa-Wren-2')
+    await mkdir(join(folder, id, 'subagents'), { recursive: true })
+    await writeFile(join(folder, `${id}.jsonl`), JSON.stringify({ type: 'user', cwd: '/w/mesa/Wren/2', message: { content: 'Cut it' }, timestamp: '2026-11-07T10:00:00.000Z' }) + '\n')
+    await writeFile(join(folder, '55555555-5555-4555-8555-555555555555.jsonl'), '')
+    expect((await conversationFiles(dir, id)).map((p) => p.slice(folder.length + 1)).sort()).toEqual([id, `${id}.jsonl`])
+    // Only an id, never a path: nothing outside the transcripts can be named.
+    expect(isSessionId('../../etc')).toBe(false)
+    expect(await conversationFiles(dir, '../-w-mesa-Wren-2')).toEqual([])
+    const history = new History(dir)
+    expect((await history.list()).map((e) => e.claudeId)).toEqual([id])
+    await rm(join(folder, `${id}.jsonl`))
+    expect(await history.list()).toEqual([])
   })
 })
 

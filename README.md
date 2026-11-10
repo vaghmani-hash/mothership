@@ -47,6 +47,9 @@ organised as clients and projects.
   on the client's heading. It is listed under the client as **Client folder**, above its videos, and
   its header reads **WREN › CLIENT FOLDER**. New session's picker offers each client's folder too.
 - **Find**: the box at the top narrows the panel by client, video or session name.
+- **Delete** a conversation: the bin beside a past session (hover it), **Delete** in History, or
+  **Delete** in an open session's header. It asks first, stops Claude if it runs, and moves the
+  conversation's transcript to the macOS **Trash** (put it back from there if you change your mind).
 - **New client**: **+ New client** at the bottom. Type the client's name, pick an agency (the ones you
   have, like `mesa`; none; or a new one) and the first video (`1`). It makes
   `<watched folder>/<agency>/<client>/1/script`, shows the client in the panel as **CLIENT › Video 1**,
@@ -109,6 +112,7 @@ shows up without a restart. Folders whose name starts with `.` or `_` and Premie
 | ⇧↩ | New line in Claude's prompt |
 | ⌘C / ⌘V | Copy the terminal selection / paste: text, a screenshot (attached as an image), or files copied in Finder (as their paths). Right-click has Copy and Paste too, and files dropped on a terminal paste as their paths. |
 | ⌥⌘P | Pin the window on top of every other window (also the **Pin** button, top right) |
+| ⌘+ / ⌘− / ⌘0 | Terminal text bigger / smaller / back to its usual size (every session; kept between launches) |
 
 Closing the window or quitting keeps sessions running; **Stop All Sessions and Quit…** (⌥⌘Q) stops them.
 Every conversation stays in History to resume.

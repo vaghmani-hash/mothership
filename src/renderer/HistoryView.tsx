@@ -13,10 +13,12 @@ interface Props {
   readonly projects: readonly Project[]
   readonly sessions: readonly LiveSession[]
   readonly onResume: (entry: HistoryEntry) => void
+  /** Asks, then deletes; true once it is gone. */
+  readonly onDelete: (claudeId: string, name: string) => Promise<boolean>
   readonly onShow: (id: string) => void
 }
 
-export function HistoryView({ roots, projects, sessions, onResume, onShow }: Props): React.JSX.Element {
+export function HistoryView({ roots, projects, sessions, onResume, onShow, onDelete }: Props): React.JSX.Element {
   const now = useNow()
   const [entries, setEntries] = useState<HistoryEntry[] | null>(null)
   const [query, setQuery] = useState('')
@@ -84,7 +86,12 @@ export function HistoryView({ roots, projects, sessions, onResume, onShow }: Pro
                     </div>
                     {e.firstPrompt && e.firstPrompt !== name && <div className="history-prompt">“{e.firstPrompt}”</div>}
                   </div>
-                  {live ? <button onClick={() => onShow(live.id)}>Show</button> : <button className="primary" onClick={() => onResume(e)}>Resume</button>}
+                  <div className="history-actions">
+                    {live ? <button onClick={() => onShow(live.id)}>Show</button> : <button className="primary" onClick={() => onResume(e)}>Resume</button>}
+                    <button onClick={() => void onDelete(e.claudeId, name).then((gone) => gone && setEntries((all) => all?.filter((x) => x.claudeId !== e.claudeId) ?? null))} title="Delete this conversation (to the Trash)">
+                      Delete
+                    </button>
+                  </div>
                 </div>
               )
             })}

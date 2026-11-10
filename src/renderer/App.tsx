@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { MenuCommand } from '../shared/api'
+import { sessionName } from '../shared/names'
 import type { HistoryEntry, LiveSession, Project } from '../shared/types'
 import { HistoryView } from './HistoryView'
 import { NewClientDialog, NewVideoDialog } from './CreateDialogs'
@@ -8,7 +9,7 @@ import { SessionView } from './SessionView'
 import { SettingsDialog } from './SettingsDialog'
 import { Sidebar } from './Sidebar'
 import logo from './assets/logo.png'
-import { dispose, knownTerminals } from './terminals'
+import { dispose, knownTerminals, zoomTerminals } from './terminals'
 
 type View = { readonly kind: 'home' } | { readonly kind: 'history' } | { readonly kind: 'session'; readonly id: string }
 type Dialog =
@@ -89,6 +90,20 @@ export function App(): React.JSX.Element {
     if (s.state === 'working' && !window.confirm(`Claude is still working in #${s.seq}. Stop it and close the session?`)) return
     await window.api.close(s.id)
   }, [])
+  // Delete: after you confirm, the session stops and its conversation goes to the Trash.
+  const deleteConversation = useCallback(
+    async (claudeId: string, name: string): Promise<boolean> => {
+      if (!window.confirm(`Delete “${name}”?\n\nClaude stops if it is running, and the conversation moves to the Trash: it leaves History and can't be resumed. To get it back, put it back from the Trash.`)) return false
+      const result = await window.api.deleteConversation(claudeId)
+      if (!result.ok) {
+        setProblem(`Couldn't delete “${name}”: ${result.error}`)
+        return false
+      }
+      loadHistory()
+      return true
+    },
+    [loadHistory]
+  )
   const resumeEnded = async (s: LiveSession): Promise<void> => {
     const error = await start(s.cwd, { resume: s.claudeId, replaces: s.id })
     if (error) setProblem(error)
@@ -106,6 +121,9 @@ export function App(): React.JSX.Element {
         if (command === 'close-session' && here) void closeIt(here)
         if (command === 'history') setView({ kind: 'history' })
         if (command === 'settings') setDialog({ kind: 'settings' })
+        if (command === 'text-bigger') zoomTerminals(1)
+        if (command === 'text-smaller') zoomTerminals(-1)
+        if (command === 'text-reset') zoomTerminals(0)
       }),
     []
   )
@@ -125,6 +143,7 @@ export function App(): React.JSX.Element {
         onHistory={() => setView({ kind: 'history' })}
         onSettings={() => setDialog({ kind: 'settings' })}
         onRename={(claudeId, name) => void window.api.rename(claudeId, name).then(loadHistory)}
+        onDelete={(claudeId, name) => void deleteConversation(claudeId, name)}
         history={history}
         onResume={(e) =>
           void start(e.cwd, { resume: e.claudeId }).then((error) => {
@@ -164,6 +183,7 @@ export function App(): React.JSX.Element {
             onResume={() => void resumeEnded(current)}
             onClose={() => void close(current)}
             onRename={(name) => void window.api.rename(current.claudeId, name)}
+            onDelete={() => void deleteConversation(current.claudeId, sessionName(current))}
           />
         )}
         {view.kind === 'history' && (
@@ -172,6 +192,7 @@ export function App(): React.JSX.Element {
             projects={projects}
             sessions={sessions}
             onShow={(id) => setView({ kind: 'session', id })}
+            onDelete={deleteConversation}
             onResume={(e: HistoryEntry) =>
               void start(e.cwd, { resume: e.claudeId }).then((error) => {
                 if (error) setProblem(error)

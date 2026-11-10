@@ -25,6 +25,22 @@ const THEME = {
   brightBlack: '#5c5c66'
 }
 
+/** Terminal text size, the same in every session: ⌘+ / ⌘- / ⌘0, kept between launches. */
+const DEFAULT_SIZE = 13
+const MIN_SIZE = 9
+const MAX_SIZE = 28
+const SIZE_KEY = 'terminal-font-size'
+
+function savedSize(): number {
+  try {
+    const n = Number(localStorage.getItem(SIZE_KEY))
+    return Number.isFinite(n) && n >= MIN_SIZE && n <= MAX_SIZE ? n : DEFAULT_SIZE
+  } catch {
+    return DEFAULT_SIZE
+  }
+}
+let fontSize = savedSize()
+
 const entries = new Map<string, Entry>()
 let listening = false
 
@@ -59,7 +75,7 @@ function create(id: string, container: HTMLElement): Entry {
   const term = new Terminal({
     theme: THEME,
     fontFamily: 'Menlo, "SF Mono", Monaco, monospace',
-    fontSize: 13,
+    fontSize,
     lineHeight: 1.15,
     cursorBlink: true,
     scrollback: 10_000,
@@ -132,6 +148,20 @@ export function attach(id: string, container: HTMLElement): () => void {
   return () => {
     observer.disconnect()
     e.host.remove()
+  }
+}
+
+/** Makes every terminal's text bigger (+1), smaller (-1) or back to its usual size (0). */
+export function zoomTerminals(step: 1 | -1 | 0): void {
+  fontSize = step === 0 ? DEFAULT_SIZE : Math.min(MAX_SIZE, Math.max(MIN_SIZE, fontSize + step))
+  try {
+    localStorage.setItem(SIZE_KEY, String(fontSize))
+  } catch {
+    // Not kept this time; the size still changes.
+  }
+  for (const [id, e] of entries) {
+    e.term.options.fontSize = fontSize
+    fitNow(id, e)
   }
 }
 

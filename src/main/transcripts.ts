@@ -60,6 +60,27 @@ interface Cached {
 }
 
 /** Every conversation in the transcripts folder, newest first. Unchanged files are not read again. */
+/** A Claude Code session id: letters, digits and dashes only (it becomes a file name). */
+export const isSessionId = (id: string): boolean => /^[A-Za-z0-9-]{8,64}$/.test(id)
+
+/**
+ * A conversation's files in Claude Code's transcripts: `<project folder>/<id>.jsonl`, and the
+ * `<id>/` folder beside it when there is one (its subagents' and tools' files).
+ */
+export async function conversationFiles(dir: string, claudeId: string): Promise<string[]> {
+  if (!isSessionId(claudeId)) return []
+  const found: string[] = []
+  const folders = await readdir(dir, { withFileTypes: true }).catch(() => [])
+  for (const folder of folders) {
+    if (!folder.isDirectory()) continue
+    for (const name of [`${claudeId}.jsonl`, claudeId]) {
+      const path = join(dir, folder.name, name)
+      if (await stat(path).then(() => true, () => false)) found.push(path)
+    }
+  }
+  return found
+}
+
 export class History {
   private readonly cache = new Map<string, Cached>()
 
@@ -73,6 +94,9 @@ export class History {
       const inside = await readdir(join(this.dir, folder.name)).catch(() => [])
       for (const name of inside) if (name.endsWith('.jsonl')) files.push(join(this.dir, folder.name, name))
     }
+    // Forget transcripts that are gone (deleted), so the cache never outgrows the folder.
+    const present = new Set(files)
+    for (const path of this.cache.keys()) if (!present.has(path)) this.cache.delete(path)
     const entries = await Promise.all(files.map((f) => this.read(f)))
     return entries.filter((e): e is Omit<HistoryEntry, 'name'> => e !== null).sort((a, b) => b.lastAt - a.lastAt)
   }

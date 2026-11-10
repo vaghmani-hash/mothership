@@ -15,6 +15,7 @@ export const CH = {
   selected: 'sessions:selected',
   focus: 'sessions:focus',
   history: 'history:list',
+  deleteConversation: 'history:delete',
   pickFolder: 'folders:pick',
   reveal: 'folders:reveal',
   roots: 'roots:get',
@@ -32,7 +33,7 @@ export const CH = {
   onTopChanged: 'window:on-top-changed'
 } as const
 
-export type MenuCommand = 'new-session' | 'new-session-here' | 'close-session' | 'history' | 'settings' | 'stop-all'
+export type MenuCommand = 'new-session' | 'new-session-here' | 'close-session' | 'history' | 'settings' | 'stop-all' | 'text-bigger' | 'text-smaller' | 'text-reset'
 
 export interface NewSession {
   readonly cwd: string
@@ -63,6 +64,8 @@ export interface Api {
   /** A notification was clicked: show this session. */
   onFocus(listener: (id: string) => void): () => void
   history(): Promise<HistoryEntry[]>
+  /** Stops the conversation's session if it is open and moves its transcript to the Trash. */
+  deleteConversation(claudeId: string): Promise<Result<null>>
   pickFolder(): Promise<string | null>
   reveal(path: string): void
   roots(): Promise<string[]>

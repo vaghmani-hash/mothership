@@ -13,7 +13,7 @@ import { HostClient } from './host-client'
 import { appHome, transcriptsDir } from './paths'
 import { findProjects } from './projects'
 import { Store } from './store'
-import { History } from './transcripts'
+import { conversationFiles, History, isSessionId } from './transcripts'
 
 const home = appHome()
 app.setPath('userData', join(home, 'electron'))
@@ -90,6 +90,12 @@ function installMenu(send: (command: MenuCommand) => void, toggleOnTop: () => vo
       submenu: [
         item('History', 'CmdOrCtrl+Y', 'history'),
         item('Watched Folders…', 'CmdOrCtrl+,', 'settings'),
+        { type: 'separator' },
+        item('Bigger Text', 'CmdOrCtrl+=', 'text-bigger'),
+        // ⌘+ too (shift is part of it on most keyboards); the item above shows in the menu.
+        { ...item('Bigger Text', 'CmdOrCtrl+Plus', 'text-bigger'), visible: false, acceleratorWorksWhenHidden: true },
+        item('Smaller Text', 'CmdOrCtrl+-', 'text-smaller'),
+        item('Actual Size', 'CmdOrCtrl+0', 'text-reset'),
         { type: 'separator' },
         { id: 'on-top', label: 'Keep on Top of All Windows', type: 'checkbox', checked: onTop, accelerator: 'Alt+CmdOrCtrl+P', click: toggleOnTop },
         { type: 'separator' },
@@ -194,6 +200,19 @@ async function main(): Promise<void> {
   ipcMain.handle(CH.rename, async (_e, claudeId: unknown, name: unknown) => {
     if (typeof claudeId !== 'string' || (name !== null && typeof name !== 'string')) return
     await host.rename(claudeId, name === null ? null : tidyName(name))
+  })
+  ipcMain.handle(CH.deleteConversation, async (_e, claudeId: unknown): Promise<Result<null>> => {
+    if (typeof claudeId !== 'string' || !isSessionId(claudeId)) return { ok: false, error: 'Not a conversation.' }
+    try {
+      // Its session goes first (stopping Claude if it runs), so nothing writes the transcript again.
+      for (const s of await host.list()) if (s.claudeId === claudeId) await host.closeSession(s.id)
+      // To the Trash, not deleted: a mistake is one "Put Back" away.
+      for (const path of await conversationFiles(transcriptsDir(), claudeId)) await shell.trashItem(path)
+      await host.rename(claudeId, null)
+      return { ok: true, value: null }
+    } catch (err) {
+      return failed(err)
+    }
   })
   ipcMain.on(CH.selected, (_e, id: unknown) => {
     selected = typeof id === 'string' ? id : null

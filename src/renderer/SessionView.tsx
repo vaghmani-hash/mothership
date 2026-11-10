@@ -16,9 +16,10 @@ interface Props {
   readonly onResume: () => void
   readonly onClose: () => void
   readonly onRename: (name: string | null) => void
+  readonly onDelete: () => void
 }
 
-export function SessionView({ session, roots, projects, onNewHere, onResume, onClose, onRename }: Props): React.JSX.Element {
+export function SessionView({ session, roots, projects, onNewHere, onResume, onClose, onRename, onDelete }: Props): React.JSX.Element {
   const now = useNow()
   const box = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -45,6 +46,9 @@ export function SessionView({ session, roots, projects, onNewHere, onResume, onC
           </button>
           <button onClick={onClose} title="Close (⌘W)">
             Close
+          </button>
+          <button className="danger" onClick={onDelete} title="Stop it and move its conversation to the Trash">
+            Delete
           </button>
         </div>
         <div className="session-meta" title={session.cwd}>

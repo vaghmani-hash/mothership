@@ -22,6 +22,7 @@ const api: Api = {
   setSelected: (id) => ipcRenderer.send(CH.selected, id),
   onFocus: (listener) => listen(CH.focus, listener),
   history: () => ipcRenderer.invoke(CH.history),
+  deleteConversation: (claudeId) => ipcRenderer.invoke(CH.deleteConversation, claudeId),
   pickFolder: () => ipcRenderer.invoke(CH.pickFolder),
   reveal: (path) => ipcRenderer.send(CH.reveal, path),
   roots: () => ipcRenderer.invoke(CH.roots),

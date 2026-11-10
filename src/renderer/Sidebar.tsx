@@ -23,6 +23,8 @@ interface Props {
   readonly onHistory: () => void
   readonly onSettings: () => void
   readonly onRename: (claudeId: string, name: string | null) => void
+  /** Delete a past conversation (asks first; it goes to the Trash). */
+  readonly onDelete: (claudeId: string, name: string) => void
   /** Past conversations, newest first. */
   readonly history: readonly HistoryEntry[]
   /** Picks a past conversation up again in its own folder. */
@@ -58,7 +60,7 @@ function saveFolds(folds: Record<string, boolean>): void {
   }
 }
 
-export function Sidebar({ sessions, projects, roots, selected, page, onSelect, onNew, onHistory, onSettings, onRename, history, onResume, onResumeEnded, hidden, onShowFolders, onNewClient, onNewVideo }: Props): React.JSX.Element {
+export function Sidebar({ sessions, projects, roots, selected, page, onSelect, onNew, onHistory, onSettings, onRename, onDelete, history, onResume, onResumeEnded, hidden, onShowFolders, onNewClient, onNewVideo }: Props): React.JSX.Element {
   const now = useNow()
   const [query, setQuery] = useState('')
   const [folds, setFolds] = useState(readFolds)
@@ -174,6 +176,9 @@ export function Sidebar({ sessions, projects, roots, selected, page, onSelect, o
       </span>
       <button className="resume-button" onClick={() => onResume(e)} title={`Continue this conversation in ${e.cwd}`}>
         Resume
+      </button>
+      <button className="delete-button" onClick={() => onDelete(e.claudeId, displayName(e))} title="Delete this conversation (to the Trash)" aria-label={`Delete ${displayName(e)}`}>
+        <TrashIcon />
       </button>
     </div>
   )
@@ -302,5 +307,13 @@ export function Sidebar({ sessions, projects, roots, selected, page, onSelect, o
         </button>
       </div>
     </nav>
+  )
+}
+
+function TrashIcon(): React.JSX.Element {
+  return (
+    <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M2.5 4h11M6 4V2.5h4V4M4 4l.7 9.5h6.6L12 4M6.6 6.5v4.5M9.4 6.5v4.5" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   )
 }
