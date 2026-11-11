@@ -1,5 +1,5 @@
-// The app's two small files in its own folder: config.json (the watched folders, the session
-// folder, folders hidden as not a project, whether the window stays on top) and names.json (the
+// The app's two small files in its own folder: config.json (the watched folders, the folders
+// unticked in Choose folders, whether the window stays on top) and names.json (the
 // names you gave conversations, by Claude Code's session id). Written atomically. names.json is re-read on demand: the background host writes it too.
 
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
@@ -19,15 +19,11 @@ async function readJson(path: string): Promise<unknown> {
   }
 }
 
-/** The folder inside each project where its sessions run. */
-export const DEFAULT_SESSION_FOLDER = 'script'
-
 /** A plain folder name: no path, not hidden. */
 export const isFolderName = (name: string): boolean => name.trim() !== '' && !/[/\\\0]/.test(name) && !name.startsWith('.')
 
 export class Store {
   private roots: string[] = []
-  private sessionFolder = DEFAULT_SESSION_FOLDER
   private hidden: string[] = []
   private onTop = false
   private names = new Map<string, string>()
@@ -36,10 +32,9 @@ export class Store {
 
   async load(): Promise<void> {
     await mkdir(this.home, { recursive: true })
-    const config = (await readJson(join(this.home, 'config.json'))) as { roots?: unknown; sessionFolder?: unknown; hiddenFolders?: unknown; alwaysOnTop?: unknown } | null
+    const config = (await readJson(join(this.home, 'config.json'))) as { roots?: unknown; hiddenFolders?: unknown; alwaysOnTop?: unknown } | null
     this.onTop = config?.alwaysOnTop === true
     if (Array.isArray(config?.hiddenFolders)) this.hidden = config.hiddenFolders.filter((h): h is string => typeof h === 'string')
-    if (typeof config?.sessionFolder === 'string' && isFolderName(config.sessionFolder)) this.sessionFolder = config.sessionFolder.trim()
     if (Array.isArray(config?.roots)) this.roots = config.roots.filter((r): r is string => typeof r === 'string' && r !== '')
     // A fresh install watches nothing until you choose your clients' folder.
     else await this.saveConfig()
@@ -71,16 +66,6 @@ export class Store {
     await this.saveConfig()
   }
 
-  getSessionFolder(): string {
-    return this.sessionFolder
-  }
-
-  async setSessionFolder(name: string): Promise<void> {
-    if (!isFolderName(name)) throw new Error(`"${name}" isn't a folder name.`)
-    this.sessionFolder = name.trim()
-    await this.saveConfig()
-  }
-
   /** Whether the window stays on top of every other window. */
   getOnTop(): boolean {
     return this.onTop
@@ -103,6 +88,6 @@ export class Store {
   }
 
   private saveConfig(): Promise<void> {
-    return writeJson(join(this.home, 'config.json'), { roots: this.roots, sessionFolder: this.sessionFolder, hiddenFolders: this.hidden, alwaysOnTop: this.onTop })
+    return writeJson(join(this.home, 'config.json'), { roots: this.roots, hiddenFolders: this.hidden, alwaysOnTop: this.onTop })
   }
 }

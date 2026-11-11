@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { MenuCommand } from '../shared/api'
 import { sessionName } from '../shared/names'
+import { nextNeedingYou, openOrder, stepFrom } from '../shared/order'
 import type { HistoryEntry, LiveSession, Project } from '../shared/types'
 import { HistoryView } from './HistoryView'
 import { NewClientDialog, NewVideoDialog } from './CreateDialogs'
@@ -10,6 +11,9 @@ import { SettingsDialog } from './SettingsDialog'
 import { Sidebar } from './Sidebar'
 import logo from './assets/logo.png'
 import { dispose, knownTerminals, zoomTerminals } from './terminals'
+
+/** How often the client folders are looked up again while the window is on screen. */
+const FOLDER_CHECK_MS = 4000
 
 type View = { readonly kind: 'home' } | { readonly kind: 'history' } | { readonly kind: 'session'; readonly id: string }
 type Dialog =
@@ -28,15 +32,13 @@ export function App(): React.JSX.Element {
   const [problem, setProblem] = useState<string | null>(null)
   const [history, setHistory] = useState<HistoryEntry[]>([])
   const [hidden, setHidden] = useState<string[]>([])
-  const [sessionFolder, setSessionFolder] = useState('script')
   const loadHistory = useCallback(() => void window.api.history().then(setHistory), [])
 
   const loadSettings = useCallback(async (): Promise<void> => {
-    const [r, p, h, f] = await Promise.all([window.api.roots(), window.api.projects(), window.api.hidden(), window.api.sessionFolder()])
+    const [r, p, h] = await Promise.all([window.api.roots(), window.api.projects(), window.api.hidden()])
     setRoots(r)
     setProjects(p)
     setHidden(h)
-    setSessionFolder(f)
   }, [])
   useEffect(() => {
     void window.api.sessions().then(setSessions)
@@ -48,6 +50,8 @@ export function App(): React.JSX.Element {
     for (const id of knownTerminals()) if (!sessions.some((s) => s.id === id)) dispose(id)
   }, [sessions])
 
+  // One fixed order for the open sessions: the panel lists them in it, and the keys step through it.
+  const ordered = useMemo(() => openOrder(sessions), [sessions])
   const current = view.kind === 'session' ? sessions.find((s) => s.id === view.id) : undefined
   // Leave a session's page only once that session has gone (a new one may not be listed yet).
   const seen = useRef(new Set<string>())
@@ -60,21 +64,31 @@ export function App(): React.JSX.Element {
   // A session that starts or ends changes what there is to resume.
   const liveKey = sessions.map((s) => `${s.claudeId}:${s.state === 'ended'}`).join(',')
   useEffect(loadHistory, [loadHistory, liveKey])
-  // New project folders and conversations show up in the panel without a restart.
+  // New client and video folders show up in the panel by themselves: looked up when the window
+  // comes to the front, and every few seconds while it is on screen (Claude makes folders too).
+  const loadProjects = useCallback(async (): Promise<void> => {
+    const found = await window.api.projects()
+    setProjects((old) => (JSON.stringify(old) === JSON.stringify(found) ? old : found))
+  }, [])
   useEffect(() => {
     const refresh = (): void => {
-      void window.api.projects().then(setProjects)
+      void loadProjects()
       loadHistory()
     }
     window.addEventListener('focus', refresh)
-    return () => window.removeEventListener('focus', refresh)
-  }, [loadHistory])
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void loadProjects()
+    }, FOLDER_CHECK_MS)
+    return () => {
+      window.removeEventListener('focus', refresh)
+      window.clearInterval(timer)
+    }
+  }, [loadHistory, loadProjects])
 
   const openNew = useCallback((startIn?: string): void => {
-    // New project folders appear without a restart.
-    void window.api.projects().then(setProjects)
+    void loadProjects()
     setDialog({ kind: 'new', startIn })
-  }, [])
+  }, [loadProjects])
 
   const start = useCallback(async (cwd: string, opts: { name?: string | null; resume?: string; replaces?: string } = {}): Promise<string | null> => {
     const result = await window.api.create({ cwd, ...opts })
@@ -85,6 +99,25 @@ export function App(): React.JSX.Element {
     setView({ kind: 'session', id: made.id })
     return null
   }, [])
+
+  // + beside a client or folder: Claude starts there at once, named from your first prompt. A second
+  // click while it starts (a double-click on the small +) doesn't start another.
+  const starting = useRef(new Set<string>())
+  const startIn = useCallback(
+    (cwd: string): void => {
+      if (starting.current.has(cwd)) return
+      starting.current.add(cwd)
+      void start(cwd)
+        .then((error) => {
+          if (error) setProblem(error)
+        })
+        .finally(() => starting.current.delete(cwd))
+    },
+    [start]
+  )
+  const show = (id: string | null): void => {
+    if (id !== null) setView({ kind: 'session', id })
+  }
 
   const close = useCallback(async (s: LiveSession): Promise<void> => {
     if (s.state === 'working' && !window.confirm(`Claude is still working in #${s.seq}. Stop it and close the session?`)) return
@@ -110,12 +143,17 @@ export function App(): React.JSX.Element {
   }
 
   // The menu's shortcuts, with the latest state.
-  const latest = useRef({ current, close, openNew })
-  latest.current = { current, close, openNew }
+  const latest = useRef({ current, close, openNew, ordered })
+  latest.current = { current, close, openNew, ordered }
   useEffect(
     () =>
       window.api.onMenu((command: MenuCommand) => {
-        const { current: here, close: closeIt, openNew: newIt } = latest.current
+        const { current: here, close: closeIt, openNew: newIt, ordered: list } = latest.current
+        const key = /^session-(\d)$/.exec(command)
+        if (key) show(list[Number(key[1]) - 1]?.id ?? null)
+        if (command === 'next-session') show(stepFrom(list, here?.id ?? null, 1))
+        if (command === 'prev-session') show(stepFrom(list, here?.id ?? null, -1))
+        if (command === 'next-needs-you') show(nextNeedingYou(list, here?.id ?? null))
         if (command === 'new-session') newIt()
         if (command === 'new-session-here') newIt(here?.cwd)
         if (command === 'close-session' && here) void closeIt(here)
@@ -133,13 +171,15 @@ export function App(): React.JSX.Element {
       <div className="titlebar" />
       <PinButton />
       <Sidebar
-        sessions={sessions}
+        sessions={ordered}
         projects={projects}
         roots={roots}
         selected={current?.id ?? null}
         page={view.kind}
         onSelect={(id) => setView({ kind: 'session', id })}
-        onNew={openNew}
+        onNew={() => openNew()}
+        onStartIn={startIn}
+        onNextNeedsYou={() => show(nextNeedingYou(ordered, current?.id ?? null))}
         onHistory={() => setView({ kind: 'history' })}
         onSettings={() => setDialog({ kind: 'settings' })}
         onRename={(claudeId, name) => void window.api.rename(claudeId, name).then(loadHistory)}
@@ -204,9 +244,9 @@ export function App(): React.JSX.Element {
       </div>
       {dialog?.kind === 'new' && <NewSessionDialog projects={projects} roots={roots} sessions={sessions} startIn={dialog.startIn} onStart={(cwd, name) => start(cwd, { name })} onClose={() => setDialog(null)} />}
       {dialog?.kind === 'settings' && <SettingsDialog onClose={() => setDialog(null)} onSaved={() => void loadSettings()} />}
-      {dialog?.kind === 'new-client' && <NewClientDialog roots={roots} projects={projects} sessionFolder={sessionFolder} onCreated={(dir) => void window.api.projects().then((p) => (setProjects(p), openNew(dir)))} onClose={() => setDialog(null)} />}
+      {dialog?.kind === 'new-client' && <NewClientDialog roots={roots} projects={projects} onCreated={(dir) => void window.api.projects().then((p) => (setProjects(p), openNew(dir)))} onClose={() => setDialog(null)} />}
       {dialog?.kind === 'new-video' && (
-        <NewVideoDialog client={dialog.client} clientPath={dialog.clientPath} existing={dialog.existing} sessionFolder={sessionFolder} onCreated={(dir) => void window.api.projects().then((p) => (setProjects(p), openNew(dir)))} onClose={() => setDialog(null)} />
+        <NewVideoDialog client={dialog.client} clientPath={dialog.clientPath} existing={dialog.existing} onCreated={(dir) => void window.api.projects().then((p) => (setProjects(p), openNew(dir)))} onClose={() => setDialog(null)} />
       )}
     </div>
   )
@@ -255,12 +295,12 @@ function Home({ open, projects, watching, onNew, onHistory, onSettings }: { read
       <p className="tagline">Every session, every client, docked in one place.</p>
       <p className="muted">
         {firstRun
-          ? 'Choose the folder your clients are in. Each client is a folder, each video a folder inside it with a script folder, where Claude runs.'
+          ? 'Choose the folder your clients are in. Every client in it, and every folder in each client, is listed by itself.'
           : projects === 0
-            ? 'No projects found yet: set your watched folders.'
+            ? 'No client folders found. Is the drive with your watched folder connected?'
             : open === 0
-              ? 'Press + New on a video on the left to start Claude in it, or Resume a past session under it.'
-              : 'Pick a session on the left, press + New on its video for another, or Resume a past one.'}
+              ? 'Press + beside a client on the left to start Claude in its folder, or open the client to resume a past session.'
+              : 'Pick a session at the top left, or press + beside a client to start another.'}
       </p>
       <div className="home-actions">
         {firstRun ? (

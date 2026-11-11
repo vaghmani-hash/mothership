@@ -1,0 +1,129 @@
+/* The top of the left panel: every open session, always in sight. */
+
+/* The open sessions: they keep their place at the top, and scroll by themselves when there are many */
+
+.open-sessions {
+  flex: none;
+  max-height: 48%;
+  overflow-y: auto;
+  padding: 0 8px 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+/* One open session: its name; where it runs and what it is doing; and why, when it needs you */
+
+.session-row {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 8px;
+  row-gap: 2px;
+  padding: 7px 10px 8px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.session-row + .session-row {
+  margin-top: 2px;
+}
+
+.session-row:hover {
+  background: var(--hover);
+}
+
+.session-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.session-row[aria-current='true'] {
+  background: #2c3350;
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+/* The one that needs you is the loud thing in the panel. */
+.session-row.is-needs-you {
+  background: rgba(240, 168, 64, 0.1);
+  box-shadow: inset 3px 0 0 var(--needs);
+}
+
+.session-row.is-needs-you:hover {
+  background: rgba(240, 168, 64, 0.18);
+}
+
+/* The one you are on keeps its ring, so it reads as selected even while it needs you. */
+.session-row.is-needs-you[aria-current='true'] {
+  background: rgba(240, 168, 64, 0.18);
+  box-shadow:
+    inset 3px 0 0 var(--needs),
+    inset 0 0 0 1px rgba(240, 168, 64, 0.65);
+}
+
+.session-row.is-ended {
+  opacity: 0.75;
+}
+
+.row-name {
+  font-weight: 600;
+}
+
+.row-key {
+  font: inherit;
+  font-size: 10px;
+  color: var(--muted);
+  opacity: 0.6;
+}
+
+.session-row:hover .row-key,
+.session-row[aria-current='true'] .row-key {
+  opacity: 1;
+}
+
+.row-where,
+.row-state,
+.row-reason {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.row-where {
+  grid-column: 2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.row-state {
+  grid-column: 3;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.row-time {
+  margin-left: 6px;
+  opacity: 0.75;
+}
+
+.row-state.is-working {
+  color: var(--working);
+}
+
+.row-state.is-ready {
+  color: var(--ready);
+}
+
+.row-state.is-needs-you,
+.row-reason {
+  color: var(--needs);
+}
+
+.row-reason {
+  grid-column: 2 / 4;
+  line-height: 1.35;
+}
+
+.row-resume {
+  grid-column: 2 / 4;
+  justify-self: start;
+  margin-top: 2px;
+}

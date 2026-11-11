@@ -21,8 +21,6 @@ export const CH = {
   roots: 'roots:get',
   setRoots: 'roots:set',
   projects: 'projects:list',
-  sessionFolder: 'settings:session-folder',
-  setSessionFolder: 'settings:set-session-folder',
   hidden: 'clients:hidden',
   setHidden: 'clients:set-hidden',
   createClient: 'clients:create',
@@ -33,7 +31,24 @@ export const CH = {
   onTopChanged: 'window:on-top-changed'
 } as const
 
-export type MenuCommand = 'new-session' | 'new-session-here' | 'close-session' | 'history' | 'settings' | 'stop-all' | 'text-bigger' | 'text-smaller' | 'text-reset'
+/** ⌘1 to ⌘9 show the first nine open sessions. */
+export type SessionKey = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
+export const SESSION_KEYS: readonly SessionKey[] = [1, 2, 3, 4, 5, 6, 7, 8, 9]
+
+export type MenuCommand =
+  | 'new-session'
+  | 'new-session-here'
+  | 'close-session'
+  | 'history'
+  | 'settings'
+  | 'stop-all'
+  | 'text-bigger'
+  | 'text-smaller'
+  | 'text-reset'
+  | 'next-session'
+  | 'prev-session'
+  | 'next-needs-you'
+  | `session-${SessionKey}`
 
 export interface NewSession {
   readonly cwd: string
@@ -70,17 +85,14 @@ export interface Api {
   reveal(path: string): void
   roots(): Promise<string[]>
   setRoots(roots: readonly string[]): Promise<void>
-  /** Every client project under the watched folders, looked up again. */
+  /** Every folder of every client under the watched folders, looked up again. */
   projects(): Promise<Project[]>
-  /** The folder inside each project where sessions run (`script`). */
-  sessionFolder(): Promise<string>
-  setSessionFolder(name: string): Promise<Result<null>>
   /** The folders hidden from the panel as not a project. */
   hidden(): Promise<string[]>
   setHidden(folder: string, hide: boolean): Promise<string[]>
-  /** Makes a client folder (in an agency, or not) with its first video; answers the video's session folder. */
+  /** Makes a client folder (in an agency, or not) with its first video; answers the video's folder. */
   createClient(request: { root: string; agency: string | null; client: string; video: string }): Promise<Result<string>>
-  /** Makes a video folder in a client; answers its session folder. */
+  /** Makes a video folder in a client; answers its path. */
   createVideo(clientPath: string, name: string): Promise<Result<string>>
   onMenu(listener: (command: MenuCommand) => void): () => void
   /** Whether the window is pinned on top of every other window. */

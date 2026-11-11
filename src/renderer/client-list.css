@@ -1,0 +1,241 @@
+/* Below the open sessions: the clients, one line each, and what an open client shows. */
+
+/* The clients: an agency's name, then its clients, one line each */
+
+.client-list {
+  padding-top: 2px;
+}
+
+.agency-head {
+  margin: 10px 6px 2px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  opacity: 0.8;
+}
+
+.agency-group:first-of-type .agency-head {
+  margin-top: 0;
+}
+
+.client-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border-radius: 7px;
+}
+
+.client-row:hover {
+  background: var(--hover);
+}
+
+.client-toggle {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 6px;
+  background: none;
+  border: 0;
+  border-radius: 7px;
+  text-align: left;
+  color: var(--text);
+}
+
+.client-toggle:hover:not(:disabled) {
+  background: none;
+}
+
+.twisty {
+  flex: none;
+  width: 10px;
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.client-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.client.is-open > .client-row .client-name {
+  font-weight: 600;
+}
+
+.client-dots {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* +: start Claude here at once. Quiet until you point at its row. */
+.start-here {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin-right: 4px;
+  padding: 0 0 1px;
+  border-radius: 50%;
+  border-color: transparent;
+  background: none;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1;
+}
+
+.client-row:hover .start-here,
+.folder-row:hover .start-here {
+  border-color: var(--line);
+  color: var(--text);
+}
+
+.start-here:hover:not(:disabled) {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+/* An open client: its past sessions, then its folders (folded away until you ask) */
+
+.client-body {
+  margin: 0 0 8px 13px;
+  padding-left: 9px;
+  border-left: 1px solid var(--line);
+}
+
+.client-empty {
+  margin: 4px 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.past-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 4px 4px 8px;
+  border-radius: 7px;
+}
+
+.past-row:hover {
+  background: var(--hover);
+}
+
+.past-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.past-name,
+.past-when {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.past-when {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.resume-button,
+.row-resume {
+  flex: none;
+  padding: 1px 9px;
+  border-radius: 999px;
+  border-color: #3d4a75;
+  font-size: 12px;
+  color: var(--ready);
+  white-space: nowrap;
+}
+
+.resume-button:hover:not(:disabled),
+.row-resume:hover:not(:disabled) {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+.delete-button {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  color: var(--muted);
+  background: transparent;
+  border-color: transparent;
+  opacity: 0;
+}
+
+.past-row:hover .delete-button,
+.delete-button:focus-visible {
+  opacity: 1;
+}
+
+.delete-button:hover:not(:disabled) {
+  color: var(--error);
+  background: rgba(255, 122, 122, 0.1);
+}
+
+.more-past,
+.new-video {
+  display: block;
+  margin: 2px 4px;
+  font-size: 12px;
+}
+
+.folders-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 2px;
+  padding: 5px 8px;
+  background: none;
+  border: 0;
+  border-radius: 7px;
+  text-align: left;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.folder-list {
+  margin-left: 18px;
+}
+
+.folder-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding-left: 8px;
+  border-radius: 7px;
+}
+
+.folder-row:hover {
+  background: var(--hover);
+}
+
+.folder-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.folder-row.is-folder .folder-name {
+  color: var(--muted);
+}

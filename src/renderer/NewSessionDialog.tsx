@@ -1,5 +1,5 @@
-// "New session": a name (optional) and a project. The session runs in the project's session folder
-// (`script`); any other folder can still be chosen. From a project's +, the project is chosen.
+// "New session": a name (optional) and a folder of a client. The session runs in that folder
+// itself; any other folder can still be chosen. From a folder's +, the folder is chosen.
 
 import { useEffect, useRef, useState } from 'react'
 import { sessionName, tidyName } from '../shared/names'
@@ -70,7 +70,7 @@ export function NewSessionDialog({ projects, roots, sessions, startIn, onStart, 
         <input value={name} placeholder="Automatic: Claude names it from your first prompt" onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && cwd !== null && void start()} autoFocus />
       </label>
       <div className="field">
-        <span>Video</span>
+        <span>Folder</span>
         <div>
           {cwd !== null && (
             <div className="chosen">
@@ -81,27 +81,27 @@ export function NewSessionDialog({ projects, roots, sessions, startIn, onStart, 
                 </button>
               )}
               <div className="runs-in" title={cwd}>
-                Runs in {chosen && cwd === chosen.sessionDir ? `${chosen.title} › ${cwd.split('/').pop() ?? ''}` : cwd}
+                Runs in {cwd}
               </div>
             </div>
           )}
           {picking && (
             <div className="picker">
-              <input type="search" className="picker-search" placeholder="Find a client or video" aria-label="Find a project" value={query} onChange={(e) => setQuery(e.target.value)} />
+              <input type="search" className="picker-search" placeholder="Find a client, video or folder" aria-label="Find a project" value={query} onChange={(e) => setQuery(e.target.value)} />
               {recent.length > 0 && words.length === 0 && (
                 <>
                   <h3>Recent</h3>
                   <div className="recent">
                     {recent.map((p) => (
-                      <button key={p.path} className={`chip${cwd === p.sessionDir ? ' is-on' : ''}`} onClick={() => pick(p.sessionDir)}>
-                        {p.client} › {p.title}
+                      <button key={p.path} className={`chip${cwd === p.path ? ' is-on' : ''}`} onClick={() => pick(p.path)}>
+                        {p.name === p.client ? p.client : `${p.client} › ${p.title}`}
                       </button>
                     ))}
                   </div>
                 </>
               )}
               <div className="project-picker" role="listbox" aria-label="Projects">
-                {clients.length === 0 && <p className="muted">{projects.length === 0 ? 'No projects found under the watched folders.' : 'No project matches.'}</p>}
+                {clients.length === 0 && <p className="muted">{projects.length === 0 ? 'No client folders found under the watched folders.' : 'No folder matches.'}</p>}
                 {clients.map((c) => (
                   <div key={c.key} className="picker-client">
                     <h3>
@@ -112,11 +112,13 @@ export function NewSessionDialog({ projects, roots, sessions, startIn, onStart, 
                       <button role="option" aria-selected={cwd === c.key} className={`chip client-chip${cwd === c.key ? ' is-on' : ''}`} title={c.key} onClick={() => pick(c.key)}>
                         Client folder
                       </button>
-                      {c.projects.map((p) => (
-                        <button key={p.path} role="option" aria-selected={cwd === p.sessionDir} className={`chip${cwd === p.sessionDir ? ' is-on' : ''}`} title={p.sessionDir} onClick={() => pick(p.sessionDir)}>
-                          {p.title}
-                        </button>
-                      ))}
+                      {c.projects
+                        .filter((p) => p.path !== c.key)
+                        .map((p) => (
+                          <button key={p.path} role="option" aria-selected={cwd === p.path} className={`chip${p.kind === 'folder' ? ' folder-chip' : ''}${cwd === p.path ? ' is-on' : ''}`} title={p.path} onClick={() => pick(p.path)}>
+                            {p.title}
+                          </button>
+                        ))}
                     </div>
                   </div>
                 ))}
@@ -137,7 +139,7 @@ export function NewSessionDialog({ projects, roots, sessions, startIn, onStart, 
       </div>
       {cwd !== null && (
         <p className="hint">
-          {here.length > 0 ? `${here.length} already open in ${chosen ? 'this video' : 'this folder'}: ${here.map((s) => sessionName(s)).join(', ')}. ` : ''}
+          {here.length > 0 ? `${here.length} already open in ${chosen?.kind === 'video' ? 'this video' : 'this folder'}: ${here.map((s) => sessionName(s)).join(', ')}. ` : ''}
           {name.trim() === '' ? `With no name it shows as “${seq > 1 ? `New session ${seq}` : 'New session'}” until Claude names it from your first prompt; rename it any time.` : ''}
         </p>
       )}

@@ -1,7 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, Notification, shell } from 'electron'
 import type { MenuItemConstructorOptions } from 'electron'
 import { join } from 'node:path'
-import { CH } from '../shared/api'
+import { CH, SESSION_KEYS } from '../shared/api'
 import type { MenuCommand, NewSession } from '../shared/api'
 import { placeOf, sessionName, tidyName } from '../shared/names'
 import { projectLabel } from '../shared/projects'
@@ -11,6 +11,7 @@ import { createClient, createVideo } from './create'
 import type { NewClient } from './create'
 import { HostClient } from './host-client'
 import { appHome, transcriptsDir } from './paths'
+import { oneAtATime } from '../shared/serial'
 import { findProjects } from './projects'
 import { Store } from './store'
 import { conversationFiles, History, isSessionId } from './transcripts'
@@ -86,6 +87,16 @@ function installMenu(send: (command: MenuCommand) => void, toggleOnTop: () => vo
     },
     { role: 'editMenu' },
     {
+      label: 'Session',
+      submenu: [
+        item('Next Session', 'Control+Tab', 'next-session'),
+        item('Previous Session', 'Control+Shift+Tab', 'prev-session'),
+        item('Next Session That Needs You', 'CmdOrCtrl+J', 'next-needs-you'),
+        { type: 'separator' },
+        ...SESSION_KEYS.map((n) => item(`Show Session ${n}`, `CmdOrCtrl+${n}`, `session-${n}`))
+      ]
+    },
+    {
       label: 'View',
       submenu: [
         item('History', 'CmdOrCtrl+Y', 'history'),
@@ -126,11 +137,19 @@ async function main(): Promise<void> {
   // The clients' projects, looked up at launch and whenever the window asks; the host numbers
   // sessions by project, so it gets them too.
   let projects: Project[] = []
-  const refreshProjects = async (): Promise<Project[]> => {
-    projects = await findProjects(store.getRoots(), store.getSessionFolder())
-    void host.setProjects(projects).catch(() => undefined)
+  let sentToHost = ''
+  const refreshProjects = oneAtATime(async (): Promise<Project[]> => {
+    projects = await findProjects(store.getRoots())
+    // The window asks every few seconds; the host only hears when something changed.
+    const now = JSON.stringify(projects)
+    if (now !== sentToHost) {
+      sentToHost = now
+      void host.setProjects(projects).catch(() => {
+        sentToHost = ''
+      })
+    }
     return projects
-  }
+  })
   const history = new History(transcriptsDir())
 
   const send = (channel: string, ...args: unknown[]): void => window?.webContents.send(channel, ...args)
@@ -164,6 +183,7 @@ async function main(): Promise<void> {
       try {
         await host.open()
         await host.setProjects(projects)
+        sentToHost = JSON.stringify(projects)
         changed(await host.list())
         break
       } catch (err) {
@@ -243,17 +263,6 @@ async function main(): Promise<void> {
     }
   })
   ipcMain.handle(CH.projects, () => refreshProjects())
-  ipcMain.handle(CH.sessionFolder, () => store.getSessionFolder())
-  ipcMain.handle(CH.setSessionFolder, async (_e, name: unknown): Promise<Result<null>> => {
-    if (typeof name !== 'string') return { ok: false, error: 'Malformed request.' }
-    try {
-      await store.setSessionFolder(name)
-      await refreshProjects()
-      return { ok: true, value: null }
-    } catch (err) {
-      return failed(err)
-    }
-  })
   ipcMain.handle(CH.hidden, () => store.getHidden())
   ipcMain.handle(CH.setHidden, async (_e, folder: unknown, hide: unknown) => {
     if (typeof folder === 'string' && typeof hide === 'boolean') await store.setHidden(folder, hide)
@@ -263,9 +272,9 @@ async function main(): Promise<void> {
     const r = request as Partial<NewClient> | null
     if (typeof r?.root !== 'string' || typeof r.client !== 'string' || typeof r.video !== 'string' || (r.agency !== null && typeof r.agency !== 'string')) return { ok: false, error: 'Malformed request.' }
     try {
-      const sessionDir = await createClient(store.getRoots(), store.getSessionFolder(), { root: r.root, agency: r.agency ?? null, client: r.client, video: r.video })
+      const videoPath = await createClient(store.getRoots(), { root: r.root, agency: r.agency ?? null, client: r.client, video: r.video })
       await refreshProjects()
-      return { ok: true, value: sessionDir }
+      return { ok: true, value: videoPath }
     } catch (err) {
       return failed(err)
     }
@@ -275,9 +284,9 @@ async function main(): Promise<void> {
     // Only into a client the app knows.
     if (!projects.some((p) => p.clientPath === clientPath)) return { ok: false, error: "That client isn't one of your watched clients." }
     try {
-      const sessionDir = await createVideo(clientPath, store.getSessionFolder(), name)
+      const videoPath = await createVideo(clientPath, name)
       await refreshProjects()
-      return { ok: true, value: sessionDir }
+      return { ok: true, value: videoPath }
     } catch (err) {
       return failed(err)
     }

@@ -44,20 +44,24 @@ export interface HistoryEntry {
   readonly lastAt: number
 }
 
-/** A client's project: a folder with the session folder (`script`) inside it. */
+/**
+ * A folder of a client, as it is on disk: a video (`Video 3`, `41`) or any other folder (`Base`,
+ * `References`). Its sessions run in the folder itself. A client with no folders inside is listed
+ * as one of these too, for its own folder.
+ */
 export interface Project {
-  /** The project folder (`…/mesa/Wren/2`). */
+  /** The folder (`…/mesa/Wren/Video 2`), exactly as it is on disk. */
   readonly path: string
-  /** Where its sessions run (`…/mesa/Wren/2/script`). */
-  readonly sessionDir: string
-  /** The project's folder name (`2`, `christmas special`). */
+  /** The folder's name, trimmed (`Video 2`, `2`, `Base`). */
   readonly name: string
   /** What it is called on screen: `Video 2` for a numbered folder, else the folder name. */
   readonly title: string
-  /** The client: the folder the project sits in (`Wren`). */
+  /** A folder named as a video (`Video 3`, `41`), or any other folder of the client. */
+  readonly kind: 'video' | 'folder'
+  /** The client: the folder it sits in (`Wren`), trimmed. */
   readonly client: string
   readonly clientPath: string
-  /** Folders between the watched folder and the client (`mesa`), or null. */
+  /** The agency folder the client sits in (`mesa`), trimmed, or null. */
   readonly agency: string | null
   /** The watched folder it is under. */
   readonly root: string

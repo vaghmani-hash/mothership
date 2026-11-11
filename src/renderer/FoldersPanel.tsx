@@ -1,5 +1,5 @@
-// "Choose folders", at the bottom of the left panel: a checklist of every agency, client and video
-// the app found. Tick what you want in the list, untick what you don't; each tick applies at once.
+// "Choose folders", at the bottom of the left panel: a checklist of every agency, client and folder
+// of a client the app found. Tick what you want in the list, untick what you don't; each tick applies at once.
 // An unticked agency hides all its clients, an unticked client all its videos. Something with a
 // session running still shows (marked hidden).
 
@@ -70,7 +70,9 @@ export function FoldersPanel({ projects, hidden, onShow, onClose }: Props): Reac
                         <strong>{c.client}</strong>
                       </label>
                       <div className="show-videos">
-                        {c.projects.map((p) => (
+                        {c.projects
+                          .filter((p) => p.path !== c.key)
+                          .map((p) => (
                           <label key={p.path} title={p.path} className={clientShown ? undefined : 'is-off'}>
                             <input type="checkbox" aria-label={`Show ${c.client} › ${p.title}`} disabled={!clientShown} checked={clientShown && !off.has(p.path)} onChange={(e) => onShow([p.path], e.target.checked)} />
                             {p.title}
