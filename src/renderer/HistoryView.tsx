@@ -3,7 +3,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { displayName } from '../shared/names'
-import { clientsOf, OTHER, projectLabel, projectOf } from '../shared/projects'
+import { clientPathOf, clientsOf, OTHER, projectLabel } from '../shared/projects'
 import type { HistoryEntry, LiveSession, Project } from '../shared/types'
 import { EditableName, useNow } from './parts'
 import { clock, dayLabel } from './time'
@@ -31,7 +31,7 @@ export function HistoryView({ roots, projects, sessions, onResume, onShow, onDel
     setEntries((all) => all?.map((e) => (e.claudeId === claudeId ? { ...e, name } : e)) ?? null)
   }
 
-  const clientKey = (e: HistoryEntry): string => projectOf(e.cwd, projects)?.clientPath ?? OTHER
+  const clientKey = (e: HistoryEntry): string => clientPathOf(e.cwd, projects) ?? OTHER
   const clients = useMemo(() => {
     const used = new Set((entries ?? []).map(clientKey))
     const list = clientsOf(projects).filter((c) => used.has(c.key)).map((c) => ({ key: c.key, label: c.agency ? `${c.client} (${c.agency})` : c.client }))

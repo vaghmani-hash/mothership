@@ -6,6 +6,7 @@ import { FitAddon } from '@xterm/addon-fit'
 import { Terminal } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
 import { pasteFor } from './paste'
+import { terminalKey } from './keys'
 
 interface Entry {
   readonly term: Terminal
@@ -108,18 +109,12 @@ function create(id: string, container: HTMLElement): Entry {
   // Right-click › Paste goes to the focused element: the terminal.
   host.addEventListener('contextmenu', () => term.focus())
   term.attachCustomKeyEventHandler((ev) => {
-    if (ev.type !== 'keydown') return true
-    if (ev.metaKey && ev.key === 'c' && term.hasSelection()) {
-      void navigator.clipboard.writeText(term.getSelection())
-      return false
-    }
+    const does = terminalKey(ev, term.hasSelection())
+    if (does === 'copy') void navigator.clipboard.writeText(term.getSelection())
     // Shift+Enter: a new line in Claude's prompt (what Option+Enter sends).
-    if (ev.shiftKey && ev.key === 'Enter') {
-      window.api.input(id, '\x1b\r')
-      return false
-    }
-    // ⌘ shortcuts belong to the menu (and ⌘V pastes through it).
-    return !ev.metaKey
+    if (does === 'newline') window.api.input(id, '\x1b\r')
+    // Only what is for Claude goes on to xterm; the menu's keys are left for the menu (⌘V pastes through it).
+    return does === 'terminal'
   })
   entries.set(id, e)
   void window.api.snapshot(id).then((snap) => {

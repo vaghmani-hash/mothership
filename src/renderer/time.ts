@@ -9,6 +9,12 @@ export function ago(at: number, now: number): string {
   return `${Math.round(h / 24)}d`
 }
 
+/** The same in a sentence: "just now", "4m ago". */
+export function agoText(at: number, now: number): string {
+  const short = ago(at, now)
+  return short === 'now' ? 'just now' : `${short} ago`
+}
+
 const sameDay = (a: Date, b: Date): boolean => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
 
 /** "Today", "Yesterday", or "Mon 3 Nov" (with the year when it isn't this one). */

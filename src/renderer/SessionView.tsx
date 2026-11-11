@@ -2,11 +2,11 @@
 
 import { useEffect, useRef } from 'react'
 import { sessionName } from '../shared/names'
-import { projectLabel } from '../shared/projects'
+import { projectLabel, projectOf } from '../shared/projects'
 import type { LiveSession, Project } from '../shared/types'
 import { EditableName, StatePill, useNow } from './parts'
 import { attach } from './terminals'
-import { ago } from './time'
+import { agoText } from './time'
 
 interface Props {
   readonly session: LiveSession
@@ -22,6 +22,7 @@ interface Props {
 export function SessionView({ session, roots, projects, onNewHere, onResume, onClose, onRename, onDelete }: Props): React.JSX.Element {
   const now = useNow()
   const box = useRef<HTMLDivElement>(null)
+  const here = projectOf(session.cwd, projects)?.kind === 'video' ? 'video' : 'folder'
   useEffect(() => {
     if (!box.current) return
     return attach(session.id, box.current)
@@ -38,8 +39,8 @@ export function SessionView({ session, roots, projects, onNewHere, onResume, onC
           <StatePill state={session.state} />
         </div>
         <div className="session-tools">
-          <button onClick={onNewHere} title="Another session in this video (⌘T)">
-            + New session in this video
+          <button onClick={onNewHere} title={`Another session in this ${here} (⌘T)`}>
+            + New session in this {here}
           </button>
           <button onClick={() => window.api.reveal(session.cwd)} title={session.cwd}>
             Open folder
@@ -52,7 +53,7 @@ export function SessionView({ session, roots, projects, onNewHere, onResume, onC
           </button>
         </div>
         <div className="session-meta" title={session.cwd}>
-          Runs in {session.cwd} · started {ago(session.startedAt, now)} ago
+          Runs in {session.cwd} · started {agoText(session.startedAt, now)}
           {session.name && session.title && session.title !== session.name ? ` · Claude calls it “${session.title}”` : ''}
         </div>
       </header>

@@ -1,5 +1,5 @@
 // New client and New video: they make the folders the way you lay them out,
-// <watched folder>/[agency/]<client>/<video>/script, then offer to start Claude in the new video.
+// <watched folder>/[agency/]<client>/<video>, then offer to start Claude in the new video.
 
 import { useEffect, useRef, useState } from 'react'
 import { agenciesOf, nextVideoFolder, videoTitle } from '../shared/projects'
@@ -10,13 +10,12 @@ const NEW_AGENCY = '\u0000new'
 interface ClientProps {
   readonly roots: readonly string[]
   readonly projects: readonly Project[]
-  readonly sessionFolder: string
-  /** The new video's session folder. */
-  readonly onCreated: (sessionDir: string) => void
+  /** The new video's folder. */
+  readonly onCreated: (videoPath: string) => void
   readonly onClose: () => void
 }
 
-export function NewClientDialog({ roots, projects, sessionFolder, onCreated, onClose }: ClientProps): React.JSX.Element {
+export function NewClientDialog({ roots, projects, onCreated, onClose }: ClientProps): React.JSX.Element {
   const dialog = useRef<HTMLDialogElement>(null)
   const [root, setRoot] = useState(roots[0] ?? '')
   const agencies = agenciesOf(projects).filter((a) => a.root === root)
@@ -29,7 +28,7 @@ export function NewClientDialog({ roots, projects, sessionFolder, onCreated, onC
   useEffect(() => dialog.current?.showModal(), [])
 
   const agencyName = agency === NEW_AGENCY ? newAgency.trim() : agency
-  const where = [root, agencyName, client.trim() || '<client>', video.trim() || '<video>', sessionFolder].filter(Boolean).join('/')
+  const where = [root, agencyName, client.trim() || '<client>', video.trim() || '<video>'].filter(Boolean).join('/')
   const create = async (): Promise<void> => {
     setBusy(true)
     const result = await window.api.createClient({ root, agency: agencyName === '' ? null : agencyName, client, video })
@@ -103,12 +102,11 @@ interface VideoProps {
   readonly clientPath: string
   /** The client's video folder names, for the next number. */
   readonly existing: readonly string[]
-  readonly sessionFolder: string
-  readonly onCreated: (sessionDir: string) => void
+  readonly onCreated: (videoPath: string) => void
   readonly onClose: () => void
 }
 
-export function NewVideoDialog({ client, clientPath, existing, sessionFolder, onCreated, onClose }: VideoProps): React.JSX.Element {
+export function NewVideoDialog({ client, clientPath, existing, onCreated, onClose }: VideoProps): React.JSX.Element {
   const dialog = useRef<HTMLDialogElement>(null)
   const [name, setName] = useState(() => nextVideoFolder(existing))
   const [error, setError] = useState<string | null>(null)
@@ -129,7 +127,7 @@ export function NewVideoDialog({ client, clientPath, existing, sessionFolder, on
         <input aria-label="Video folder" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && name.trim() !== '' && void create()} autoFocus />
       </label>
       <p className="hint">
-        Shows as <strong>{client} › {videoTitle(name.trim() || '?')}</strong>. Creates <code>{`${clientPath}/${name.trim() || '<video>'}/${sessionFolder}`}</code>.
+        Shows as <strong>{client} › {videoTitle(name.trim() || '?')}</strong>. Creates <code>{`${clientPath}/${name.trim() || '<video>'}`}</code>.
       </p>
       {error && (
         <p className="error" role="alert">

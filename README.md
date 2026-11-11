@@ -8,25 +8,31 @@ One dark Mac window for every [Claude Code](https://claude.com/claude-code) sess
 client projects. Made for video editors who run Claude in a folder per video, it works for any work
 organised as clients and projects.
 
-- **Clients and projects.** A project is any folder with a `script` folder inside (`mesa/Wren/2`,
-  `mesa/Mara Stone/christmas special`, `Jules/2`); its client is the folder it sits in (Wren, Mara
-  Stone, Jules), and a folder above that (an agency such as `mesa` or `Dawn Media`) shows dimmed
-  beside the client's name. Every session of a project runs in its `script` folder.
-- **The left panel** is one tree. Each client's name is a dropdown (**▸ WREN** `mesa` · 2 videos · 2 open):
-  click it to unfold all its videos. A client starts folded unless a session runs in it, and the app
-  remembers what you fold. Inside, each video. A numbered
-  folder reads as **Video 2**; others keep their name (**busy parents**). Everything about a video is in
-  one place under it: its open sessions (name, then state in colour: Ready, Working, or **Needs you**
-  and why, e.g. "Claude needs your permission to use Bash"), its latest past sessions with **Resume**,
-  and **+ New**. A video with sessions shows as a card with how many are open; one with nothing going on
-  stays one line. **Find a client, video or session** at the top narrows the tree, also by a past
-  session's name. The dock icon shows how many sessions need you.
-- **Start a session**: **+ New session** (⌘N), find the project by client or project name (or pick a
-  recent one), and Claude starts in its `script` folder, in a real terminal inside the app. **Use another
-  folder…** covers anything that isn't a project.
-- **Another session in the same video**: **+ New** on the video, or **+ New session in this video**
-  (⌘T) on a session. The session header always says where you are (**WREN › VIDEO 2**) above the
-  session's name. An untitled second session reads "New session 2" until Claude names it.
+- **Clients and their folders, read from disk.** Point the app at the folder your clients are in and
+  it lists every client and every folder inside each one, as they are: videos (`Video 3`, `41`), `Base`,
+  `References`, anything. Nothing is added by hand and no folder has to be laid out one way. A new
+  folder shows up by itself within a few seconds. An agency folder (`mesa`, `Dawn Media`) shows dimmed
+  beside the client's name. A session runs in the folder you start it in. See
+  [How folders are read](#how-folders-are-read).
+- **The left panel** has two parts. On top, **Open sessions**: every session that is open, always in
+  sight, in the order you started them (a row never moves). Each row has its name, where it runs
+  (**Crew Engine**, or **Crew Engine › Video 3**) and its state in colour: Ready, Working, or
+  **Needs you**, with why ("Finished its turn", "Claude needs your permission to use Bash"). A session
+  that needs you is lit in amber, and **1 needs you** in the heading is a button that shows it.
+  Below, **Clients**: one line per client under its agency, folded. A client's line shows a dot for
+  each session open in it. **Find a client or session** at the top narrows both parts, also by a past
+  session's name or a folder's. The dock icon shows how many sessions need you.
+- **Start a session**: **+** beside a client. Claude starts in the client's own folder at once (where
+  its `CLAUDE.md` and rules are), in a real terminal inside the app, named from your first prompt.
+  **+ New session** (⌘N) is for naming it first or picking any other folder.
+- **Open a client** (click its name) for its past sessions, each with **Resume**, the latest three
+  first, and **Folders**, folded away: its videos in number order, then `Base` and the rest, each with
+  its own **+** for the times a session should start in one of them. The app remembers what you open.
+- **Switch sessions**: click a row, or ⌃Tab and ⌃⇧Tab for the next and the previous one, ⌘1 to ⌘9 for
+  the first nine (each row shows its key), and ⌘J for the next one that needs you.
+- **Another session in the same place**: **+ New session in this folder** (⌘T) on a session. The
+  session header always says where you are (**WREN › VIDEO 2**) above the session's name. An untitled
+  second session reads "New session 2" until Claude names it.
 - **Names**: give one when you start it, or leave it empty and it is named automatically: Claude's own
   title for the conversation, or your first prompt until there is one. **Rename** any session: the ✎
   beside its name (open or past, in the tree or in History), the **Rename** button in the session
@@ -42,21 +48,17 @@ organised as clients and projects.
 - **Choose folders** (bottom of the left panel): a checklist of every agency, client and video, right
   below the list. Tick what you want in the list, untick what you don't; it applies at once. Unticking
   an agency hides all its clients, a client all its videos. **Tick all** shows everything again. Kept as
-  `hiddenFolders` in `config.json`. Something with a session running still shows, marked hidden.
-- **A session in the client folder itself** (where a client's own files are, like `base`): **+ Session**
-  on the client's heading. It is listed under the client as **Client folder**, above its videos, and
-  its header reads **WREN › CLIENT FOLDER**. New session's picker offers each client's folder too.
-- **Find**: the box at the top narrows the panel by client, video or session name.
+  `hiddenFolders` in `config.json`. A session open in a hidden client still shows at the top.
 - **Delete** a conversation: the bin beside a past session (hover it), **Delete** in History, or
   **Delete** in an open session's header. It asks first, stops Claude if it runs, and moves the
   conversation's transcript to the macOS **Trash** (put it back from there if you change your mind).
 - **New client**: **+ New client** at the bottom. Type the client's name, pick an agency (the ones you
   have, like `mesa`; none; or a new one) and the first video (`1`). It makes
-  `<watched folder>/<agency>/<client>/1/script`, shows the client in the panel as **CLIENT › Video 1**,
+  `<watched folder>/<agency>/<client>/1`, shows the client in the panel as **CLIENT › Video 1**,
   and opens New session there. A name that is already a folder is refused; nothing is ever overwritten.
-- **New video**: **+ Video** on a client's heading suggests the next number (`11` after `2` and `10`) and
-  makes `<client>/<number>/script` (unfold the client to see **+ Video**). You can also make the folders yourself in Finder: any folder with a
-  `script` folder inside shows up as a video when the window comes to the front.
+- **New video**: **+ New video folder** in a client's **Folders** suggests the next one in the way that
+  client names them (`11` after `2` and `10`, `Video 5` after `Video 4`) and makes `<client>/<name>`. You can also
+  make folders yourself in Finder, or let Claude make them: they show up by themselves.
 - **Alerts**: a macOS notification when a session finishes its turn or asks for permission or input,
   unless you are looking at it. Click it to jump to that session. While the app is closed, the background
 host still sends them (as plain macOS notifications).
@@ -76,35 +78,48 @@ npm run package    # builds dist/mac-arm64/Mothership.app
 Drag `dist/mac-arm64/Mothership.app` into Applications. The app is not signed: the first time,
 right-click **Mothership.app** → **Open**. Allow notifications when macOS asks.
 
-On first launch, **Choose your clients' folder…**: the folder your clients are in. Each client is a
-folder in it (optionally inside an agency folder), and each video a folder in the client with a
-`script` folder inside, where Claude runs:
+On first launch, **Choose your clients' folder…**: the folder your clients are in. That is the only
+setup. **Watched folders…** (⌘,) at the bottom of the sidebar changes it later. To run it from source
+instead: `npm run dev`.
+
+### How folders are read
 
 ```
-Clients/                  ← the folder you choose
-  Acme/                   ← a client
-    1/                    ← a video ("Video 1")
-      script/             ← Claude runs here
-  Studio North/           ← an agency
-    Northwind/            ← its client
-      launch film/
-        script/
+Client/                   ← the folder you choose
+  Coda Social/            ← an agency: its clients have a Base folder
+    Jonah Park/          ← a client
+      Base/               ← listed, after the videos
+      Video 3/            ← a video; Claude runs here
+      Video 4/
+    RIO/                  ← a client too, without a Base
+      Rio Video 3/
+  Acme/                   ← a client straight in the folder you chose
+    Base/
+    41/                   ← "Video 41"
 ```
 
-**+ New client** and **+ Video** make these folders for you. To run it from source instead:
-`npm run dev`.
+- A folder with a `Base` folder inside is a **client**.
+- A folder whose own folders have a `Base` is an **agency**, and every folder in it is a client.
+- Where there is no `Base` at all, the names decide: a folder with videos inside (`Video 3`, `41`) is a
+  client, a folder whose folders have videos inside is an agency, and anything else is a client.
+- Every folder directly inside a client is listed: videos first, by their number, then the rest by name.
+  A client with nothing in it yet is listed too, as its own folder.
+- Names show trimmed (`Kite Media ` reads **Kite Media**); the folders themselves are never renamed.
+- Skipped: names starting with `.` or `_`, `node_modules`, Premiere's own folders, and links to other
+  drives. Untick anything else you don't want to see in **Choose folders**.
 
-**Watched folders…** (⌘,) at the bottom of the sidebar sets where your clients are and the folder
-inside each project where sessions run (`script` by default; change it to whatever your projects use). Projects are
-looked up again whenever the window comes to the front or you open New session, so a new project folder
-shows up without a restart. Folders whose name starts with `.` or `_` and Premiere's own folders are skipped.
+The folders are looked up again when the window comes to the front, when you open New session, and
+every few seconds while the window is on screen.
 
 ## Keys
 
 | Key | |
 |---|---|
 | ⌘N | New session… |
-| ⌘T | New session in the project of the session you are on |
+| ⌘T | New session in the folder of the session you are on |
+| ⌃Tab / ⌃⇧Tab | The next / the previous open session |
+| ⌘1 … ⌘9 | The first nine open sessions, in the order of the list |
+| ⌘J | The next session that needs you |
 | ⌘W | Close the session (asks while Claude is working) |
 | ⌥⌘Q | Stop all sessions and quit |
 | ⌘Y | History |
@@ -133,7 +148,7 @@ Every conversation stays in History to resume.
   and never writes there. It reads only the start (folder, first prompt) and the end (latest title) of
   each file, so large transcripts stay fast. Print-mode runs (`claude -p`) are left out.
 - The app's own files are in `~/Library/Application Support/Mothership/`: `config.json` (watched
-  folders, the session folder, hidden folders, whether the window is pinned), `names.json` (your names, by conversation id), `hook.sh`, `claude-settings.json`, `events/`.
+  folders, hidden folders, whether the window is pinned), `names.json` (your names, by conversation id), `hook.sh`, `claude-settings.json`, `events/`.
   Delete the folder to start fresh; your conversations stay in Claude Code's transcripts.
 
 ## Tests
@@ -160,10 +175,10 @@ src/main/       Electron main process
   sessions.ts     terminals (node-pty), session states, names, resume
   hooks.ts        hook.sh + claude-settings.json, and the events folder
   transcripts.ts  History: head and tail of each transcript
-  projects.ts     finding the projects (folders with a script folder) under the watched folders
+  projects.ts     finding the clients under the watched folders, and every folder in each
   store.ts        config.json and names.json
 src/preload/    the window's bridge (window.api)
-src/renderer/   the React window: left panel, session view, new-session dialog, History, settings
+src/renderer/   the React window: left panel (open sessions, clients), session view, new-session dialog, History, settings
 src/shared/     types and pure logic: states, transcript parsing, names, clients and projects, the API
 test/           unit tests, the stand-in claude, and the e2e script
 ```

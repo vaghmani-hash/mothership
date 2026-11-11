@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { hostBinary } from '../src/main/host-client'
+import { createClient, createVideo } from '../src/main/create'
 import { findProjects } from '../src/main/projects'
 import { EventInbox, writeHookFiles } from '../src/main/hooks'
 import type { HookEvent } from '../src/main/hooks'
@@ -112,38 +113,83 @@ describe('History', () => {
 })
 
 describe('folders and names', () => {
-  it('finds projects (folders with a script folder) and their clients, as the editor lays them out', async () => {
+  it('finds every client and every folder in it, however the client lays them out', async () => {
     const root = await temp()
     const dirs = [
-      'mesa/Wren/2/script', 'mesa/Wren/2/raw', 'mesa/Wren/10/script',
-      'mesa/cora/1/script', 'mesa/cora/1/Adobe Premiere Pro Auto-Save',
-      'mesa/Lena park/1/script', 'mesa/Lena park/base/Branding Assets',
-      'mesa/Mara Stone/christmas special/script', 'mesa/Mara Stone/base/broll',
-      'mesa/Nico Fields/1/script', 'mesa/Nico Fields/script',
-      'mesa/styles/wren/reference', 'mesa/mira/Mira Moss/Video 1',
-      'Jules/2/script', 'Jules/2/remotion/scripts',
-      'Dawn Media/test/base/script', 'FINANCE/TAXES/script', '.hidden/x/script'
+      // An agency: its clients have a Base folder. Every folder in it is a client, Base or not.
+      'Coda/Jonah/Base', 'Coda/Jonah/Video 3/script', 'Coda/Jonah/Video 10', 'Coda/Jonah/Production-System',
+      'Coda/Jonah/.board', 'Coda/Jonah/_old', 'Coda/Jonah/node_modules/x', 'Coda/Jonah/Adobe Premiere Pro Auto-Save',
+      'Coda/RIO/Rio Video 3', 'Coda/RIO/Rio video 4 ',
+      'Coda/Mateo/PJ',
+      // A client whose own name reads like a video doesn't stop its agency being one.
+      'Coda/Abel video 4/PJ',
+      'Coda/New Guy',
+      // Names with a space at the end, as they are on the drive.
+      'Kite Media /Paperdesk /Base', 'Kite Media /Paperdesk /41', 'Kite Media /Paperdesk /Video 38',
+      // A client straight in the watched folder.
+      'Solo/base', 'Solo/Video 1',
+      // No Base anywhere: videos inside make it a client; clients with videos inside make it an agency.
+      'Jules/2/script',
+      'mesa/Wren/2', 'mesa/Wren/10', 'mesa/cora/1',
+      'FINANCE/TAXES',
+      '.hidden/x/Base', '_Archive/y/Base'
     ]
     for (const d of dirs) await mkdir(join(root, d), { recursive: true })
-    const projects = await findProjects([root], 'script')
-    const seen = projects.map((p) => `${p.agency ?? '-'} | ${p.client} | ${p.name}`).sort()
+    await writeFile(join(root, 'Coda/Jonah/AGENTS.md'), 'a file is not a folder')
+    const projects = await findProjects([root])
+    const seen = projects.map((p) => `${p.agency ?? '-'} | ${p.client} | ${p.name} | ${p.kind}`).sort()
     expect(seen).toEqual([
-      '- | FINANCE | TAXES',
-      '- | Jules | 2',
-      'Dawn Media | test | base',
-      'mesa | Lena park | 1',
-      'mesa | Mara Stone | christmas special',
-      'mesa | Nico Fields | 1',
-      'mesa | Wren | 10',
-      'mesa | Wren | 2',
-      'mesa | cora | 1'
+      '- | FINANCE | TAXES | folder',
+      '- | Jules | 2 | video',
+      '- | Solo | Video 1 | video',
+      '- | Solo | base | folder',
+      'Coda | Abel video 4 | PJ | folder',
+      'Coda | Jonah | Base | folder',
+      'Coda | Jonah | Production-System | folder',
+      'Coda | Jonah | Video 10 | video',
+      'Coda | Jonah | Video 3 | video',
+      'Coda | Mateo | PJ | folder',
+      'Coda | New Guy | New Guy | folder',
+      'Coda | RIO | Rio Video 3 | video',
+      'Coda | RIO | Rio video 4 | video',
+      'Kite Media | Paperdesk | 41 | video',
+      'Kite Media | Paperdesk | Base | folder',
+      'Kite Media | Paperdesk | Video 38 | video',
+      'mesa | Wren | 10 | video',
+      'mesa | Wren | 2 | video',
+      'mesa | cora | 1 | video'
     ])
-    const wren2 = projects.find((p) => p.client === 'Wren' && p.name === '2')
-    expect(wren2?.sessionDir).toBe(join(root, 'mesa/Wren/2/script'))
-    expect(wren2?.clientPath).toBe(join(root, 'mesa/Wren'))
-    // Another session folder name finds the projects that have it.
-    await mkdir(join(root, 'Jules/3/claude'), { recursive: true })
-    expect((await findProjects([root], 'claude')).map((p) => p.name)).toEqual(['3'])
+    // Paths are the folders as they are on disk; sessions run in the folder itself.
+    const v38 = projects.find((p) => p.client === 'Paperdesk' && p.name === 'Video 38')
+    expect(v38?.path).toBe(join(root, 'Kite Media /Paperdesk /Video 38'))
+    expect(v38?.clientPath).toBe(join(root, 'Kite Media /Paperdesk '))
+    const empty = projects.find((p) => p.client === 'New Guy')
+    expect(empty?.path).toBe(join(root, 'Coda/New Guy'))
+    // A new folder shows up on the next look, and a missing watched folder finds nothing.
+    await mkdir(join(root, 'Coda/New Guy/Video 1'))
+    expect((await findProjects([root])).filter((p) => p.client === 'New Guy').map((p) => p.name)).toEqual(['Video 1'])
+    expect(await findProjects([join(root, 'not there')])).toEqual([])
+  })
+
+  it('makes a new client and a new video as plain folders, inside the agency folder as it is on disk', async () => {
+    const root = await temp()
+    await mkdir(join(root, 'Kite Media ', 'JAY', 'Base'), { recursive: true })
+    const video = await createClient([root], { root, agency: 'Kite Media', client: 'Nova', video: 'Video 1' })
+    expect(video).toBe(join(root, 'Kite Media ', 'Nova', 'Video 1'))
+    expect((await readdir(root)).sort()).toEqual(['Kite Media '])
+    expect(await readdir(video)).toEqual([])
+    await expect(createClient([root], { root, agency: 'Kite Media', client: 'Nova', video: '1' })).rejects.toThrow(/already/)
+    expect(await createClient([root], { root, agency: 'Fresh', client: 'Ada', video: '1' })).toBe(join(root, 'Fresh', 'Ada', '1'))
+    expect(await createClient([root], { root, agency: null, client: 'Solo', video: '1' })).toBe(join(root, 'Solo', '1'))
+    const next = await createVideo(join(root, 'Kite Media ', 'Nova'), 'Video 2')
+    expect(next).toBe(join(root, 'Kite Media ', 'Nova', 'Video 2'))
+    await expect(createVideo(join(root, 'Kite Media ', 'Nova'), 'Video 2')).rejects.toThrow(/already/)
+    // A folder that reads the same but ends in a space on disk is the same client or video: no twin beside it.
+    await mkdir(join(root, 'Kite Media ', 'Paperdesk ', 'Video 3 '), { recursive: true })
+    await expect(createClient([root], { root, agency: 'Kite Media', client: 'Paperdesk', video: '1' })).rejects.toThrow(/already/)
+    await expect(createVideo(join(root, 'Kite Media ', 'Paperdesk '), 'Video 3')).rejects.toThrow(/already/)
+    expect((await readdir(join(root, 'Kite Media '))).sort()).toEqual(['JAY', 'Nova', 'Paperdesk '])
+    expect(await readdir(join(root, 'Kite Media ', 'Paperdesk '))).toEqual(['Video 3 '])
   })
 
   it('keeps names across launches, and empty goes back to automatic', async () => {
