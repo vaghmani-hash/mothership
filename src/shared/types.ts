@@ -42,6 +42,8 @@ export interface HistoryEntry {
   readonly firstPrompt: string | null
   /** Time of the last line, in ms. */
   readonly lastAt: number
+  /** When it started, in ms (null if its transcript doesn't say). */
+  readonly startedAt?: number | null
 }
 
 /** A client's project: a folder with the session folder (`script`) inside it. */

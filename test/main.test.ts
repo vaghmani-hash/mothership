@@ -111,6 +111,19 @@ describe('History', () => {
   })
 })
 
+describe('names.json', () => {
+  it('keeps every name when many are saved at once, and stays valid JSON', async () => {
+    const home = await temp()
+    const store = new Store(home)
+    await store.load()
+    await Promise.all(Array.from({ length: 20 }, (_v, i) => store.setName(`id-${i}`, `Name number ${i} ${'x'.repeat(i * 7)}`)))
+    const saved = JSON.parse(await readFile(join(home, 'names.json'), 'utf8')) as { names: Record<string, string> }
+    expect(Object.keys(saved.names).length).toBe(20)
+    expect(saved.names['id-19']).toBe(`Name number 19 ${'x'.repeat(133)}`)
+    expect((await readdir(home)).filter((f) => f.endsWith('.tmp'))).toEqual([])
+  })
+})
+
 describe('folders and names', () => {
   it('finds projects (folders with a script folder) and their clients, as the editor lays them out', async () => {
     const root = await temp()

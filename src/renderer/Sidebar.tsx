@@ -227,8 +227,8 @@ export function Sidebar({ sessions, projects, roots, selected, page, onSelect, o
                   <button className="client-tool" aria-label={`New session in the ${c.client} client folder`} title={`Start Claude in the client folder itself: ${c.key}`} onClick={() => onNew(c.key)}>
                     + Session
                   </button>
-                  <button className="client-tool" aria-label={`Rename the ${c.client} folder`} title={`Rename ${c.key}`} onClick={() => onRenameFolder({ label: c.client, folder: c.key })}>
-                    Rename
+                  <button className="client-tool icon-tool" aria-label={`Rename the ${c.client} folder`} title={`Rename the folder ${c.key}`} onClick={() => onRenameFolder({ label: c.client, folder: c.key })}>
+                    <PencilIcon />
                   </button>
                   <button className="client-tool" aria-label={`New video for ${c.client}`} title={`A new video folder in ${c.key}`} onClick={() => onNewVideo({ client: c.client, clientPath: c.key, existing: clientsOf(projects).find((x) => x.key === c.key)?.projects.map((p) => p.name) ?? [] })}>
                     + Video

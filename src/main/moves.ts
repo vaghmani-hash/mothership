@@ -13,15 +13,17 @@ import { headOf } from './transcripts'
 export interface Move {
   readonly from: string
   readonly to: string
+  /** When it was renamed (ms). It applies to what started before then, never after: a new folder
+   * may take the old name, and what starts in it is its own. */
+  readonly at: number
 }
 
-const inside = (path: string, folder: string): boolean => path === folder || path.startsWith(folder + sep)
+export const inside = (path: string, folder: string): boolean => path === folder || path.startsWith(folder + sep)
 
-/** `path` read through the renames, oldest first. A path that still exists is left as it is. */
-export function applyMoves(path: string, moves: readonly Move[], exists: (p: string) => boolean = existsSync): string {
-  if (moves.length === 0 || exists(path)) return path
+/** `path`, as something that started at `since` (ms) remembers it, read through the renames since. */
+export function applyMoves(path: string, moves: readonly Move[], since: number): string {
   let now = path
-  for (const m of moves) if (inside(now, m.from)) now = m.to + now.slice(m.from.length)
+  for (const m of moves) if (m.at > since && inside(now, m.from)) now = m.to + now.slice(m.from.length)
   return now
 }
 
@@ -29,7 +31,7 @@ export function applyMoves(path: string, moves: readonly Move[], exists: (p: str
  * The folder that was renamed, from a path before and after (`…/Mara/video 3/script` and
  * `…/Mara/rough cut/script` → `…/Mara/video 3` became `…/Mara/rough cut`). Null if they are the same.
  */
-export function moveBetween(before: string, after: string): Move | null {
+export function moveBetween(before: string, after: string): Omit<Move, 'at'> | null {
   if (before === after) return null
   const a = before.split(sep)
   const b = after.split(sep)
@@ -40,63 +42,68 @@ export function moveBetween(before: string, after: string): Move | null {
   return { from: a.join(sep), to: b.join(sep) }
 }
 
+/**
+ * Whether the renames already say `move` (the same rename noticed again, or a folder inside one
+ * already renamed): the latest rename of a folder holding `move.from` takes it to `move.to`, and
+ * nothing renamed it away again since.
+ */
+export function alreadyMoved(move: Omit<Move, 'at'>, moves: readonly Move[]): boolean {
+  for (let i = moves.length - 1; i >= 0; i--) {
+    const m = moves[i]
+    if (!m || !inside(move.from, m.from)) continue
+    const mapped = m.to + move.from.slice(m.from.length)
+    return mapped === move.to && !moves.slice(i + 1).some((later) => inside(mapped, later.from))
+  }
+  return false
+}
+
 /** Where Claude Code keeps a folder's conversations: its path with `-` for every other character. */
 export const claudeProjectDir = (cwd: string): string => cwd.replace(/[^A-Za-z0-9]/g, '-')
 
-/** The folder a transcript folder belongs to, from the first conversation in it that says. */
-async function folderOf(dir: string): Promise<string | null> {
-  const names = (await readdir(dir).catch(() => [])).filter((n) => n.endsWith('.jsonl'))
-  for (const name of names) {
-    const path = join(dir, name)
-    const info = await stat(path).catch(() => null)
-    if (!info) continue
-    const head = await headOf(path, info.size).catch(() => null)
-    if (head?.cwd) return head.cwd
-  }
-  return null
-}
-
 /**
- * Moves the conversations of every folder inside `move.from` to where Claude Code looks for them
- * under the new name: each `<id>.jsonl` with its `<id>/` folder, then the rest (its memory) once
- * nothing is left. A conversation in `busy` (Claude is still writing it where it started) waits.
- * `earlier` are the renames before this one. Nothing in them is changed, and nothing already at
- * the new place is overwritten. Answers how
- * many conversations moved and how many still wait.
+ * Puts every conversation whose folder was renamed since it started where Claude Code looks for it
+ * under the new name: its `<id>.jsonl` with its `<id>/` folder, and, once a transcript folder has
+ * no conversation left, the rest of it (its memory). A conversation in `busy` (Claude is still
+ * writing it where it started) waits. Nothing in them is changed, and nothing already at the new
+ * place is overwritten. Answers how many moved and how many still wait.
  */
-export async function moveConversations(transcripts: string, move: Move, busy: ReadonlySet<string> = new Set(), earlier: readonly Move[] = []): Promise<{ moved: number; waiting: number }> {
+export async function moveConversations(transcripts: string, moves: readonly Move[], busy: ReadonlySet<string> = new Set()): Promise<{ moved: number; waiting: number }> {
   let moved = 0
   let waiting = 0
+  if (moves.length === 0) return { moved, waiting }
   for (const entry of await readdir(transcripts, { withFileTypes: true }).catch(() => [])) {
     if (!entry.isDirectory()) continue
     const source = join(transcripts, entry.name)
-    // A conversation names the folder it started in: earlier renames first, then this one.
-    const started = await folderOf(source)
-    const cwd = started === null ? null : applyMoves(started, earlier, () => false)
-    if (cwd === null || !inside(cwd, move.from)) continue
-    const target = join(transcripts, claudeProjectDir(move.to + cwd.slice(move.from.length)))
-    if (target === source) continue
+    let movedTo: string | null = null
     try {
-      await mkdir(target, { recursive: true })
-      const names = await readdir(source)
-      const ids = names.filter((n) => n.endsWith('.jsonl')).map((n) => n.slice(0, -'.jsonl'.length))
-      const held = ids.filter((id) => busy.has(id))
-      waiting += held.length
-      for (const id of ids) {
-        if (busy.has(id)) continue
-        for (const name of [`${id}.jsonl`, id]) {
-          if (!names.includes(name) || existsSync(join(target, name))) continue
-          await rename(join(source, name), join(target, name))
-          if (name.endsWith('.jsonl')) moved++
+      for (const name of (await readdir(source)).filter((n) => n.endsWith('.jsonl'))) {
+        const info = await stat(join(source, name)).catch(() => null)
+        const head = info ? await headOf(join(source, name), info.size).catch(() => null) : null
+        if (!head?.cwd) continue
+        const now = applyMoves(head.cwd, moves, head.startedAt ?? 0)
+        const target = join(transcripts, claudeProjectDir(now))
+        if (now === head.cwd || target === source) continue
+        const id = name.slice(0, -'.jsonl'.length)
+        if (busy.has(id)) {
+          waiting++
+          continue
         }
+        await mkdir(target, { recursive: true })
+        for (const part of [name, id]) {
+          if (!existsSync(join(source, part)) || existsSync(join(target, part))) continue
+          await rename(join(source, part), join(target, part))
+          if (part === name) moved++
+        }
+        movedTo = target
       }
-      // Its memory and other files go once no conversation is left writing beside them.
-      if (held.length === 0) {
-        for (const name of await readdir(source)) if (!existsSync(join(target, name))) await rename(join(source, name), join(target, name))
+      // Its memory and other files go once no conversation is left beside them.
+      const left = await readdir(source)
+      if (movedTo !== null && !left.some((n) => n.endsWith('.jsonl'))) {
+        for (const name of left) if (!existsSync(join(movedTo, name))) await rename(join(source, name), join(movedTo, name))
         if ((await readdir(source)).length === 0) await rmdir(source)
       }
     } catch (err) {
-      console.error('[moves] could not move conversations', source, '→', target, err)
+      console.error('[moves] could not move conversations from', source, err)
     }
   }
   return { moved, waiting }

@@ -6,8 +6,11 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { join, sep } from 'node:path'
 import type { Move } from './moves'
 
+let writes = 0
+
 export async function writeJson(path: string, value: unknown): Promise<void> {
-  const tmp = `${path}.${process.pid}.tmp`
+  // Its own temporary file each time: two saves at once never share one (and mix their text).
+  const tmp = `${path}.${process.pid}.${++writes}.tmp`
   await writeFile(tmp, `${JSON.stringify(value, null, 2)}\n`, 'utf8')
   await rename(tmp, path)
 }
@@ -35,6 +38,8 @@ export class Store {
   private moves: Move[] = []
   private known: Record<string, string> = {}
   private names = new Map<string, string>()
+  /** Name changes, one after another: each reads the file the last one wrote. */
+  private naming: Promise<void> = Promise.resolve()
 
   constructor(private readonly home: string) {}
 
@@ -49,7 +54,8 @@ export class Store {
     else await this.saveConfig()
     await this.reloadNames()
     const folders = (await readJson(join(this.home, 'folders.json'))) as { moves?: unknown; known?: unknown } | null
-    if (Array.isArray(folders?.moves)) this.moves = folders.moves.filter((m): m is Move => typeof m?.from === 'string' && typeof m?.to === 'string')
+    if (Array.isArray(folders?.moves))
+      this.moves = folders.moves.filter((m) => typeof m?.from === 'string' && typeof m?.to === 'string').map((m) => ({ from: m.from, to: m.to, at: typeof m.at === 'number' ? m.at : 0 }))
     if (folders?.known && typeof folders.known === 'object') this.known = Object.fromEntries(Object.entries(folders.known).filter((e): e is [string, string] => typeof e[1] === 'string'))
   }
 
@@ -132,7 +138,13 @@ export class Store {
     return this.names.get(claudeId) ?? null
   }
 
-  async setName(claudeId: string, name: string | null): Promise<void> {
+  setName(claudeId: string, name: string | null): Promise<void> {
+    const next = this.naming.then(() => this.writeName(claudeId, name))
+    this.naming = next.catch(() => undefined)
+    return next
+  }
+
+  private async writeName(claudeId: string, name: string | null): Promise<void> {
     await this.reloadNames()
     if (name === null) this.names.delete(claudeId)
     else this.names.set(claudeId, name)

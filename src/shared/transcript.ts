@@ -52,6 +52,8 @@ export interface Head {
   readonly firstPrompt: string | null
   /** False for print-mode and SDK runs (`claude -p`), which are not conversations to resume. */
   readonly interactive: boolean
+  /** When it started (its first line with a folder), in ms; renames after it apply to its folder. */
+  readonly startedAt: number | null
 }
 
 /** From the first lines of a transcript. */
@@ -59,15 +61,20 @@ export function readHead(lines: readonly string[]): Head {
   let cwd: string | null = null
   let firstPrompt: string | null = null
   let interactive = true
+  let startedAt: number | null = null
   for (const raw of lines) {
     const line = parse(raw, '"cwd"', '"type":"user"')
     if (!line) continue
+    if (cwd === null && text(line['cwd']) !== null) {
+      const at = Date.parse(text(line['timestamp']) ?? '')
+      startedAt = Number.isNaN(at) ? null : at
+    }
     cwd ??= text(line['cwd'])
     if (typeof line['entrypoint'] === 'string' && line['entrypoint'].startsWith('sdk')) interactive = false
     firstPrompt ??= promptOf(line)
     if (cwd !== null && firstPrompt !== null) break
   }
-  return { cwd, firstPrompt, interactive }
+  return { cwd, firstPrompt, interactive, startedAt }
 }
 
 export interface Tail {

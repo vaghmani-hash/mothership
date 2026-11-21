@@ -112,7 +112,7 @@ export class History {
       // Print-mode runs and conversations without a prompt of yours aren't worth resuming.
       if (head.cwd !== null && head.firstPrompt !== null && head.interactive) {
         const tail = await tailOf(path, info.size)
-        entry = { claudeId: basename(path, '.jsonl'), cwd: head.cwd, title: tail.customTitle ?? tail.aiTitle, firstPrompt: head.firstPrompt, lastAt: tail.lastAt ?? info.mtimeMs }
+        entry = { claudeId: basename(path, '.jsonl'), cwd: head.cwd, title: tail.customTitle ?? tail.aiTitle, firstPrompt: head.firstPrompt, lastAt: tail.lastAt ?? info.mtimeMs, startedAt: head.startedAt }
       }
     } catch (err) {
       console.error('[history] unreadable transcript', path, err)

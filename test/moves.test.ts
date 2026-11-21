@@ -1,5 +1,6 @@
-// Renamed folders: paths read through the renames, the renamed folder found from a session's
-// before and after, and its conversations moved to where Claude Code looks for them.
+// Renamed folders: a rename applies to what started before it (a new folder may take the old
+// name), the renamed folder is found from a session's before and after, and conversations move to
+// where Claude Code looks for them.
 
 import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, readdir, readFile, writeFile } from 'node:fs/promises'
@@ -9,24 +10,29 @@ import { describe, expect, it } from 'vitest'
 import { applyMoves, claudeProjectDir, moveBetween, moveConversations } from '../src/main/moves'
 import { Store } from '../src/main/store'
 
-const gone = (): boolean => false
+const T = (h: number): number => Date.parse(`2026-11-21T0${h}:00:00.000Z`)
+const M = '/c/mesa/Mara'
+// What happened in Mara's folder: video 3's work went to "rough cut" (1:00); a new video,
+// "step count", was made and got a session (2:00); then it was renamed "video 3" (3:00).
+const moves = [
+  { from: `${M}/video 3`, to: `${M}/rough cut`, at: T(1) },
+  { from: `${M}/step count`, to: `${M}/video 3`, at: T(3) }
+]
 
 describe('renamed folders', () => {
-  it('reads a path through the renames, in order, and leaves a path that exists alone', () => {
-    const moves = [
-      { from: '/c/mesa/Mara/video 3', to: '/c/mesa/Mara/rough cut' },
-      { from: '/c/mesa/Mara', to: '/c/mesa/Mara Stone' }
-    ]
-    expect(applyMoves('/c/mesa/Mara/video 3/script', moves, gone)).toBe('/c/mesa/Mara Stone/rough cut/script')
-    expect(applyMoves('/c/mesa/Mara/video 30/script', moves, gone)).toBe('/c/mesa/Mara Stone/video 30/script')
-    expect(applyMoves('/c/mesa/Mara/video 3/script', moves, () => true)).toBe('/c/mesa/Mara/video 3/script')
-    // Renamed and renamed back.
-    expect(applyMoves('/c/A/script', [{ from: '/c/A', to: '/c/B' }, { from: '/c/B', to: '/c/A' }], gone)).toBe('/c/A/script')
+  it('reads a path through the renames since it was remembered, never through older ones', () => {
+    expect(applyMoves(`${M}/video 3/script`, moves, T(0))).toBe(`${M}/rough cut/script`)
+    expect(applyMoves(`${M}/step count/script`, moves, T(2))).toBe(`${M}/video 3/script`)
+    // Started in the new "video 3": it is that folder, not the old one of the same name.
+    expect(applyMoves(`${M}/video 3/script`, moves, T(4))).toBe(`${M}/video 3/script`)
+    expect(applyMoves(`${M}/video 30/script`, moves, T(0))).toBe(`${M}/video 30/script`)
+    // Renamed, and renamed back.
+    expect(applyMoves('/c/A/script', [{ from: '/c/A', to: '/c/B', at: T(1) }, { from: '/c/B', to: '/c/A', at: T(2) }], T(0))).toBe('/c/A/script')
   })
 
   it("finds the renamed folder from a session's folder before and after", () => {
-    expect(moveBetween('/c/mesa/Mara/video 3/script', '/c/mesa/Mara/step count rough/script')).toEqual({ from: '/c/mesa/Mara/video 3', to: '/c/mesa/Mara/step count rough' })
-    expect(moveBetween('/c/mesa/Mara/2/script', '/c/mesa/Mara Stone/2/script')).toEqual({ from: '/c/mesa/Mara', to: '/c/mesa/Mara Stone' })
+    expect(moveBetween(`${M}/step count/script`, `${M}/video 3/script`)).toEqual({ from: `${M}/step count`, to: `${M}/video 3` })
+    expect(moveBetween(`${M}/2/script`, '/c/mesa/Mara Stone/2/script')).toEqual({ from: M, to: '/c/mesa/Mara Stone' })
     expect(moveBetween('/c/x/script', '/c/x/script')).toBeNull()
   })
 
@@ -34,52 +40,47 @@ describe('renamed folders', () => {
     expect(claudeProjectDir('/Users/me/Client work/mesa/Shaun Sidey/1 - Get Toned/script')).toBe('-Users-me-Client-work-mesa-Shaun-Sidey-1---Get-Toned-script')
   })
 
-  it('moves the conversations of a renamed folder, holds back a running one, and overwrites nothing', async () => {
+  it('moves each conversation to its folder now, holds back a running one, and never mixes in an older one', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'cs-moves-'))
-    const before = '/c/mesa/Mara/video 3/script'
-    const after = '/c/mesa/Mara/rough cut/script'
-    const source = join(dir, claudeProjectDir(before))
-    const line = (id: string) => JSON.stringify({ type: 'user', cwd: before, sessionId: id, message: { content: 'hi' }, timestamp: '2026-11-20T10:00:00.000Z' }) + '\n'
-    await mkdir(join(source, 'aaaa1111', 'subagents'), { recursive: true })
-    await mkdir(join(source, 'memory'))
-    await writeFile(join(source, 'aaaa1111.jsonl'), line('aaaa1111'))
-    await writeFile(join(source, 'bbbb2222.jsonl'), line('bbbb2222'))
-    await writeFile(join(source, 'memory', 'MEMORY.md'), 'notes')
-    // Elsewhere, untouched.
-    await mkdir(join(dir, claudeProjectDir('/c/mesa/Mara/video 30/script')))
-    await writeFile(join(dir, claudeProjectDir('/c/mesa/Mara/video 30/script'), 'cccc3333.jsonl'), line('cccc3333').replace(before, '/c/mesa/Mara/video 30/script'))
-    const move = { from: '/c/mesa/Mara/video 3', to: '/c/mesa/Mara/rough cut' }
-    const target = join(dir, claudeProjectDir(after))
+    const at = (cwd: string) => join(dir, claudeProjectDir(cwd))
+    const line = (cwd: string, id: string, h: number) => JSON.stringify({ type: 'user', cwd, sessionId: id, message: { content: 'hi' }, timestamp: new Date(T(h)).toISOString() }) + '\n'
+    // The old video 3 conversation (0:00) and a new one in the new "video 3" (4:00) share a folder.
+    await mkdir(join(at(`${M}/video 3/script`), 'old0000'), { recursive: true })
+    await writeFile(join(at(`${M}/video 3/script`), 'old0000.jsonl'), line(`${M}/video 3/script`, 'old0000', 0))
+    await writeFile(join(at(`${M}/video 3/script`), 'new4444.jsonl'), line(`${M}/video 3/script`, 'new4444', 4))
+    await mkdir(join(at(`${M}/step count/script`), 'memory'), { recursive: true })
+    await writeFile(join(at(`${M}/step count/script`), 'step2222.jsonl'), line(`${M}/step count/script`, 'step2222', 2))
+    await writeFile(join(at(`${M}/step count/script`), 'memory', 'MEMORY.md'), 'notes')
 
-    // bbbb2222 is still running: it and the memory beside it wait.
-    expect(await moveConversations(dir, move, new Set(['bbbb2222']))).toEqual({ moved: 1, waiting: 1 })
-    expect((await readdir(target)).sort()).toEqual(['aaaa1111', 'aaaa1111.jsonl'])
-    expect((await readdir(source)).sort()).toEqual(['bbbb2222.jsonl', 'memory'])
-    // It ended: the rest follows and the old folder goes.
-    expect(await moveConversations(dir, move)).toEqual({ moved: 1, waiting: 0 })
-    expect((await readdir(target)).sort()).toEqual(['aaaa1111', 'aaaa1111.jsonl', 'bbbb2222.jsonl', 'memory'])
-    expect(existsSync(source)).toBe(false)
-    expect(await readFile(join(target, 'aaaa1111.jsonl'), 'utf8')).toBe(line('aaaa1111'))
-    expect(await readdir(join(dir, claudeProjectDir('/c/mesa/Mara/video 30/script')))).toEqual(['cccc3333.jsonl'])
+    // step2222 is still running: it and the memory beside it wait.
+    expect(await moveConversations(dir, moves, new Set(['step2222']))).toEqual({ moved: 1, waiting: 1 })
+    expect((await readdir(at(`${M}/rough cut/script`))).sort()).toEqual(['old0000', 'old0000.jsonl'])
+    expect(await readdir(at(`${M}/video 3/script`))).toEqual(['new4444.jsonl'])
+    // It ended: it joins the new video 3, with its memory; the old folder goes.
+    expect(await moveConversations(dir, moves)).toEqual({ moved: 1, waiting: 0 })
+    expect((await readdir(at(`${M}/video 3/script`))).sort()).toEqual(['memory', 'new4444.jsonl', 'step2222.jsonl'])
+    expect(existsSync(at(`${M}/step count/script`))).toBe(false)
+    expect(await readFile(join(at(`${M}/rough cut/script`), 'old0000.jsonl'), 'utf8')).toBe(line(`${M}/video 3/script`, 'old0000', 0))
+    // Settled: nothing moves again.
+    expect(await moveConversations(dir, moves)).toEqual({ moved: 0, waiting: 0 })
 
-    // Never overwrites: a conversation already at the new place stays as it is.
-    await mkdir(source)
-    await writeFile(join(source, 'aaaa1111.jsonl'), line('aaaa1111') + line('aaaa1111'))
-    await moveConversations(dir, move)
-    expect(await readFile(join(target, 'aaaa1111.jsonl'), 'utf8')).toBe(line('aaaa1111'))
-    expect(existsSync(join(source, 'aaaa1111.jsonl'))).toBe(true)
+    // Never overwrites: a copy already at the new place stays as it is.
+    await mkdir(at(`${M}/video 3/script`), { recursive: true })
+    await writeFile(join(at(`${M}/video 3/script`), 'old0000.jsonl'), line(`${M}/video 3/script`, 'old0000', 0) + 'more\n')
+    await moveConversations(dir, moves)
+    expect(await readFile(join(at(`${M}/rough cut/script`), 'old0000.jsonl'), 'utf8')).toBe(line(`${M}/video 3/script`, 'old0000', 0))
   })
 
   it('keeps renames in folders.json and moves hidden folders with them', async () => {
     const home = await mkdtemp(join(tmpdir(), 'cs-moves-store-'))
     const store = new Store(home)
     await store.load()
-    await store.setHidden('/c/mesa/Mara/video 3', true)
-    await store.addMove({ from: '/c/mesa/Mara', to: '/c/mesa/Mara Stone' })
+    await store.setHidden(`${M}/video 3`, true)
+    await store.addMove({ from: M, to: '/c/mesa/Mara Stone', at: T(1) })
     await store.setKnown({ '1:2': '/c/mesa/Mara Stone' })
     const again = new Store(home)
     await again.load()
-    expect(again.getMoves()).toEqual([{ from: '/c/mesa/Mara', to: '/c/mesa/Mara Stone' }])
+    expect(again.getMoves()).toEqual([{ from: M, to: '/c/mesa/Mara Stone', at: T(1) }])
     expect(again.getHidden()).toEqual(['/c/mesa/Mara Stone/video 3'])
     expect(again.getKnown()).toEqual({ '1:2': '/c/mesa/Mara Stone' })
   })

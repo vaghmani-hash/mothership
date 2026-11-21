@@ -1265,3 +1265,32 @@ button.danger:hover:not(:disabled) {
 .rename-folder:focus-visible {
   opacity: 1;
 }
+
+/* A client heading never lets its buttons cover the name: the name shortens (…) instead. */
+.client-toggle {
+  overflow: hidden;
+}
+
+.client-toggle .client-title {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.client-toggle .twisty,
+.client-toggle .agency,
+.client-toggle .hidden-tag,
+.client-toggle .video-count,
+.client-toggle .client-sub {
+  flex: none;
+  white-space: nowrap;
+}
+
+.client-tool.icon-tool {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  padding: 0;
+}

@@ -13,7 +13,7 @@ import { isFolder } from './folders'
 import { createClient, createVideo } from './create'
 import type { NewClient } from './create'
 import { HostClient } from './host-client'
-import { applyMoves, moveBetween, moveConversations } from './moves'
+import { alreadyMoved, applyMoves, moveBetween, moveConversations } from './moves'
 import type { Move } from './moves'
 import { appHome, transcriptsDir } from './paths'
 import { findProjects } from './projects'
@@ -134,32 +134,28 @@ async function main(): Promise<void> {
   const history = new History(transcriptsDir())
 
   // Renamed folders (see moves.ts): every remembered path is read through them.
-  const resolve = (path: string): string => applyMoves(path, store.getMoves())
+  // A path as something that started at `since` remembers it, read through the renames after that.
+  const resolve = (path: string, since: number | null | undefined): string => applyMoves(path, store.getMoves(), since ?? 0)
   const mapSessions = (list: LiveSession[]): LiveSession[] =>
     list.map((s) => {
-      const cwd = resolve(s.cwd)
+      const cwd = resolve(s.cwd, s.startedAt)
       return cwd === s.cwd ? s : { ...s, cwd }
     })
   const liveSessions = async (): Promise<LiveSession[]> => mapSessions(await host.list())
   // Conversations follow their folder, except a running one (Claude keeps writing where it
   // started): those move once they end. Every rename is tried again until nothing is left behind.
-  // Renames (by their place in the list) whose conversations haven't all moved yet.
-  let pending: number[] = store.getMoves().map((_m, i) => i)
+  // True while some conversation of a renamed folder hasn't moved yet (a running one waits).
+  let pending = store.getMoves().length > 0
   const moveWaiting = async (): Promise<void> => {
-    if (pending.length === 0) return
+    if (!pending) return
     const busy = new Set((await host.list().catch(() => [])).filter((s) => s.state !== 'ended').map((s) => s.claudeId))
-    const moves = store.getMoves()
-    const left: number[] = []
-    for (const i of pending) {
-      const move = moves[i]
-      if (move && (await moveConversations(transcriptsDir(), move, busy, moves.slice(0, i))).waiting > 0) left.push(i)
-    }
-    pending = left
+    pending = (await moveConversations(transcriptsDir(), store.getMoves(), busy)).waiting > 0
   }
-  const recordMove = async (move: Move): Promise<boolean> => {
-    if (resolve(move.from) === move.to) return false
-    await store.addMove(move)
-    pending = [...pending, store.getMoves().length - 1]
+  const recordMove = async (move: Omit<Move, 'at'>): Promise<boolean> => {
+    // Already known: noticed again after a rename in the app, or a folder inside one renamed.
+    if (alreadyMoved(move, store.getMoves())) return false
+    await store.addMove({ ...move, at: Date.now() })
+    pending = true
     await moveWaiting()
     return true
   }
@@ -202,11 +198,11 @@ async function main(): Promise<void> {
     await store.setKnown(current)
     // Not known before (renamed before this version, say): where its running session is now.
     for (const s of await host.list().catch(() => [])) {
-      if (s.state === 'ended' || existsSync(resolve(s.cwd))) continue
+      if (s.state === 'ended' || existsSync(resolve(s.cwd, s.startedAt))) continue
       for (const pid of (await run('pgrep', ['-f', s.claudeId])).split('\n').filter(Boolean)) {
         const reported = (await run('lsof', ['-a', '-p', pid, '-d', 'cwd', '-Fn'])).split('\n').find((l) => l.startsWith('n'))?.slice(1)
         if (!reported || !existsSync(reported)) continue
-        const move = moveBetween(resolve(s.cwd), asWatched(reported))
+        const move = moveBetween(resolve(s.cwd, s.startedAt), asWatched(reported))
         if (move && (await recordMove(move))) found = true
         break
       }
@@ -217,7 +213,8 @@ async function main(): Promise<void> {
     projects = await findProjects(store.getRoots(), store.getSessionFolder())
     void host.setProjects(projects).catch(() => undefined)
     try {
-      if (await findMoves()) changed(await liveSessions())
+      // `changed` reads the paths through the renames itself: give it the host's own list.
+      if (await findMoves()) changed(await host.list())
       else await moveWaiting()
     } catch (err) {
       console.error('[moves] checking for renamed folders failed:', err)
@@ -238,7 +235,7 @@ async function main(): Promise<void> {
     // Not for the session you are looking at in a focused window.
     if (window?.isFocused() && selected === session.id) return
     if (!Notification.isSupported()) return
-    const where = projectLabel(resolve(session.cwd), projects, store.getRoots())
+    const where = projectLabel(resolve(session.cwd, session.startedAt), projects, store.getRoots())
     const note = new Notification({ title: where, subtitle: sessionName(session), body: session.reason ?? 'Needs you', silent: false })
     note.on('click', () => {
       showWindow()
@@ -316,7 +313,7 @@ async function main(): Promise<void> {
   ipcMain.handle(CH.history, async (): Promise<HistoryEntry[]> => {
     const roots = store.getRoots()
     await store.reloadNames()
-    const entries = (await history.list()).map((e) => ({ ...e, cwd: resolve(e.cwd) }))
+    const entries = (await history.list()).map((e) => ({ ...e, cwd: resolve(e.cwd, e.startedAt) }))
     return entries.filter((e) => placeOf(e.cwd, roots).root !== null).map((e) => ({ ...e, name: store.nameOf(e.claudeId) }))
   })
   ipcMain.handle(CH.pickFolder, async () => {

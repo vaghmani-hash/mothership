@@ -14,7 +14,7 @@ describe('transcripts', () => {
       user('side', { isSidechain: true }),
       user([{ type: 'text', text: 'Place the animation [Image #1] slots\nfor scenes 1 to 9' }, { type: 'image', source: {} }])
     ]
-    expect(readHead(lines)).toEqual({ cwd: '/w/mesa/Wren/2', firstPrompt: 'Place the animation slots', interactive: true })
+    expect(readHead(lines)).toMatchObject({ cwd: '/w/mesa/Wren/2', firstPrompt: 'Place the animation slots', interactive: true })
   })
 
   it('marks print-mode and SDK runs', () => {
