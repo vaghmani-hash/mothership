@@ -146,3 +146,54 @@ export function NewVideoDialog({ client, clientPath, existing, sessionFolder, on
     </dialog>
   )
 }
+
+interface RenameProps {
+  /** What it is on screen (`Wren`, `Wren › Video 2`). */
+  readonly label: string
+  readonly folder: string
+  readonly onRenamed: (folder: string) => void
+  readonly onClose: () => void
+}
+
+/** Rename a client or video folder on disk; its sessions and past conversations go with it. */
+export function RenameFolderDialog({ label, folder, onRenamed, onClose }: RenameProps): React.JSX.Element {
+  const dialog = useRef<HTMLDialogElement>(null)
+  const current = folder.slice(folder.lastIndexOf('/') + 1)
+  const [name, setName] = useState(current)
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  useEffect(() => dialog.current?.showModal(), [])
+  const changed = name.trim() !== '' && name.trim() !== current
+  const rename = async (): Promise<void> => {
+    if (!changed) return
+    setBusy(true)
+    const result = await window.api.renameFolder(folder, name)
+    setBusy(false)
+    if (result.ok) onRenamed(result.value)
+    else setError(result.error)
+  }
+  return (
+    <dialog ref={dialog} className="dialog" aria-label={`Rename ${label}`} onClose={onClose}>
+      <h2>Rename {label}</h2>
+      <label className="field">
+        <span>Folder name</span>
+        <input aria-label="Folder name" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void rename()} onFocus={(e) => e.target.select()} autoFocus />
+      </label>
+      <p className="hint">
+        Renames <code>{folder}</code> on disk. Its open sessions keep running and stay under it, and its past conversations move with it, so Resume still works. Premiere projects that use media inside it may need relinking, as after a rename in Finder.
+      </p>
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
+      <div className="dialog-actions">
+        <span className="spacer" />
+        <button onClick={onClose}>Cancel</button>
+        <button className="primary" disabled={busy || !changed} onClick={() => void rename()}>
+          Rename
+        </button>
+      </div>
+    </dialog>
+  )
+}

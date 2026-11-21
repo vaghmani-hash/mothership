@@ -3,7 +3,7 @@ import type { MenuCommand } from '../shared/api'
 import { sessionName } from '../shared/names'
 import type { HistoryEntry, LiveSession, Project } from '../shared/types'
 import { HistoryView } from './HistoryView'
-import { NewClientDialog, NewVideoDialog } from './CreateDialogs'
+import { NewClientDialog, NewVideoDialog, RenameFolderDialog } from './CreateDialogs'
 import { NewSessionDialog } from './NewSessionDialog'
 import { SessionView } from './SessionView'
 import { SettingsDialog } from './SettingsDialog'
@@ -17,6 +17,7 @@ type Dialog =
   | { readonly kind: 'settings' }
   | { readonly kind: 'new-client' }
   | { readonly kind: 'new-video'; readonly client: string; readonly clientPath: string; readonly existing: readonly string[] }
+  | { readonly kind: 'rename-folder'; readonly label: string; readonly folder: string }
   | null
 
 export function App(): React.JSX.Element {
@@ -62,9 +63,12 @@ export function App(): React.JSX.Element {
   useEffect(loadHistory, [loadHistory, liveKey])
   // New project folders and conversations show up in the panel without a restart.
   useEffect(() => {
+    // Projects first: looking them up also notices folders renamed in Finder, which History reads through.
     const refresh = (): void => {
-      void window.api.projects().then(setProjects)
-      loadHistory()
+      void window.api.projects().then((p) => {
+        setProjects(p)
+        loadHistory()
+      })
     }
     window.addEventListener('focus', refresh)
     return () => window.removeEventListener('focus', refresh)
@@ -163,6 +167,7 @@ export function App(): React.JSX.Element {
         }}
         onNewClient={() => setDialog({ kind: 'new-client' })}
         onNewVideo={(c) => setDialog({ kind: 'new-video', ...c })}
+        onRenameFolder={(f) => setDialog({ kind: 'rename-folder', ...f })}
       />
       <div className="content">
         {problem && (
@@ -205,6 +210,21 @@ export function App(): React.JSX.Element {
       {dialog?.kind === 'new' && <NewSessionDialog projects={projects} roots={roots} sessions={sessions} startIn={dialog.startIn} onStart={(cwd, name) => start(cwd, { name })} onClose={() => setDialog(null)} />}
       {dialog?.kind === 'settings' && <SettingsDialog onClose={() => setDialog(null)} onSaved={() => void loadSettings()} />}
       {dialog?.kind === 'new-client' && <NewClientDialog roots={roots} projects={projects} sessionFolder={sessionFolder} onCreated={(dir) => void window.api.projects().then((p) => (setProjects(p), openNew(dir)))} onClose={() => setDialog(null)} />}
+      {dialog?.kind === 'rename-folder' && (
+        <RenameFolderDialog
+          label={dialog.label}
+          folder={dialog.folder}
+          onClose={() => setDialog(null)}
+          onRenamed={() => {
+            setDialog(null)
+            void window.api.projects().then((p) => {
+              setProjects(p)
+              loadHistory()
+            })
+            void window.api.sessions().then(setSessions)
+          }}
+        />
+      )}
       {dialog?.kind === 'new-video' && (
         <NewVideoDialog client={dialog.client} clientPath={dialog.clientPath} existing={dialog.existing} sessionFolder={sessionFolder} onCreated={(dir) => void window.api.projects().then((p) => (setProjects(p), openNew(dir)))} onClose={() => setDialog(null)} />
       )}

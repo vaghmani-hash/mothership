@@ -113,6 +113,14 @@ function create(id: string, container: HTMLElement): Entry {
       void navigator.clipboard.writeText(term.getSelection())
       return false
     }
+    // The Mac's line keys, as Terminal sends them: ⌘⌫ deletes to the start of the line (Ctrl+U),
+    // ⌘← / ⌘→ go to its start / end (Ctrl+A / Ctrl+E).
+    const lineKey = ev.metaKey && !ev.altKey && !ev.ctrlKey ? { Backspace: '\x15', ArrowLeft: '\x01', ArrowRight: '\x05' }[ev.key] : undefined
+    if (lineKey) {
+      ev.preventDefault()
+      window.api.input(id, lineKey)
+      return false
+    }
     // Shift+Enter: a new line in Claude's prompt (what Option+Enter sends).
     if (ev.shiftKey && ev.key === 'Enter') {
       window.api.input(id, '\x1b\r')

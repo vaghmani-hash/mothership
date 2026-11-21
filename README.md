@@ -47,6 +47,11 @@ organised as clients and projects.
   on the client's heading. It is listed under the client as **Client folder**, above its videos, and
   its header reads **WREN › CLIENT FOLDER**. New session's picker offers each client's folder too.
 - **Find**: the box at the top narrows the panel by client, video or session name.
+- **Rename a folder**: **Rename** on a client's heading, or the ✎ on a video (hover it). It renames the
+  folder on disk; its open sessions keep running under the new name and its past conversations move
+  with it (where Claude Code looks for them), so **Resume** keeps working. A conversation still running
+  follows once it ends. Folders renamed in **Finder** are noticed too, by their identity on disk, the
+  next time the window comes to the front. Renames are kept in `folders.json`.
 - **Delete** a conversation: the bin beside a past session (hover it), **Delete** in History, or
   **Delete** in an open session's header. It asks first, stops Claude if it runs, and moves the
   conversation's transcript to the macOS **Trash** (put it back from there if you change your mind).
@@ -112,6 +117,7 @@ shows up without a restart. Folders whose name starts with `.` or `_` and Premie
 | ⇧↩ | New line in Claude's prompt |
 | ⌘C / ⌘V | Copy the terminal selection / paste: text, a screenshot (attached as an image), or files copied in Finder (as their paths). Right-click has Copy and Paste too, and files dropped on a terminal paste as their paths. |
 | ⌥⌘P | Pin the window on top of every other window (also the **Pin** button, top right) |
+| ⌘⌫ / ⌘← / ⌘→ | In a terminal: delete to the start of the line / go to its start / end (as in Terminal) |
 | ⌘+ / ⌘− / ⌘0 | Terminal text bigger / smaller / back to its usual size (every session; kept between launches) |
 
 Closing the window or quitting keeps sessions running; **Stop All Sessions and Quit…** (⌥⌘Q) stops them.
@@ -133,7 +139,7 @@ Every conversation stays in History to resume.
   and never writes there. It reads only the start (folder, first prompt) and the end (latest title) of
   each file, so large transcripts stay fast. Print-mode runs (`claude -p`) are left out.
 - The app's own files are in `~/Library/Application Support/Mothership/`: `config.json` (watched
-  folders, the session folder, hidden folders, whether the window is pinned), `names.json` (your names, by conversation id), `hook.sh`, `claude-settings.json`, `events/`.
+  folders, the session folder, hidden folders, whether the window is pinned), `folders.json` (renamed folders, and each watched folder's identity to notice the next rename), `names.json` (your names, by conversation id), `hook.sh`, `claude-settings.json`, `events/`.
   Delete the folder to start fresh; your conversations stay in Claude Code's transcripts.
 
 ## Tests

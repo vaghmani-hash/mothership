@@ -35,6 +35,8 @@ interface Props {
   readonly hidden: readonly string[]
   readonly onShowFolders: (paths: readonly string[], shown: boolean) => void
   readonly onNewClient: () => void
+  /** Rename a client or video folder (asks for the new name). */
+  readonly onRenameFolder: (folder: { readonly label: string; readonly folder: string }) => void
   readonly onNewVideo: (client: { readonly client: string; readonly clientPath: string; readonly existing: readonly string[] }) => void
 }
 
@@ -60,7 +62,7 @@ function saveFolds(folds: Record<string, boolean>): void {
   }
 }
 
-export function Sidebar({ sessions, projects, roots, selected, page, onSelect, onNew, onHistory, onSettings, onRename, onDelete, history, onResume, onResumeEnded, hidden, onShowFolders, onNewClient, onNewVideo }: Props): React.JSX.Element {
+export function Sidebar({ sessions, projects, roots, selected, page, onSelect, onNew, onHistory, onSettings, onRename, onDelete, history, onResume, onResumeEnded, hidden, onShowFolders, onNewClient, onNewVideo, onRenameFolder }: Props): React.JSX.Element {
   const now = useNow()
   const [query, setQuery] = useState('')
   const [folds, setFolds] = useState(readFolds)
@@ -225,6 +227,9 @@ export function Sidebar({ sessions, projects, roots, selected, page, onSelect, o
                   <button className="client-tool" aria-label={`New session in the ${c.client} client folder`} title={`Start Claude in the client folder itself: ${c.key}`} onClick={() => onNew(c.key)}>
                     + Session
                   </button>
+                  <button className="client-tool" aria-label={`Rename the ${c.client} folder`} title={`Rename ${c.key}`} onClick={() => onRenameFolder({ label: c.client, folder: c.key })}>
+                    Rename
+                  </button>
                   <button className="client-tool" aria-label={`New video for ${c.client}`} title={`A new video folder in ${c.key}`} onClick={() => onNewVideo({ client: c.client, clientPath: c.key, existing: clientsOf(projects).find((x) => x.key === c.key)?.projects.map((p) => p.name) ?? [] })}>
                     + Video
                   </button>
@@ -257,6 +262,9 @@ export function Sidebar({ sessions, projects, roots, selected, page, onSelect, o
                       <div className="video-head" title={p.sessionDir}>
                         <span className="video-title">{p.title}</span>
                         {busy && <span className="video-count">{live.length} open</span>}
+                        <button className="rename-folder" aria-label={`Rename the ${c.client} › ${p.title} folder`} title={`Rename ${p.path}`} onClick={() => onRenameFolder({ label: `${c.client} › ${p.title}`, folder: p.path })}>
+                          <PencilIcon />
+                        </button>
                         <button className="new-here" aria-label={`New session in ${c.client} › ${p.title}`} title={`Start Claude in ${p.sessionDir}`} onClick={() => onNew(p.sessionDir)}>
                           + New
                         </button>
@@ -314,6 +322,14 @@ function TrashIcon(): React.JSX.Element {
   return (
     <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true">
       <path d="M2.5 4h11M6 4V2.5h4V4M4 4l.7 9.5h6.6L12 4M6.6 6.5v4.5M9.4 6.5v4.5" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function PencilIcon(): React.JSX.Element {
+  return (
+    <svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M11 2.5l2.5 2.5L6 12.5H3.5V10L11 2.5zM9.5 4l2.5 2.5" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
     </svg>
   )
 }

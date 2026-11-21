@@ -27,6 +27,7 @@ export const CH = {
   setHidden: 'clients:set-hidden',
   createClient: 'clients:create',
   createVideo: 'clients:create-video',
+  renameFolder: 'folders:rename',
   menu: 'menu:command',
   onTop: 'window:on-top',
   setOnTop: 'window:set-on-top',
@@ -82,6 +83,8 @@ export interface Api {
   createClient(request: { root: string; agency: string | null; client: string; video: string }): Promise<Result<string>>
   /** Makes a video folder in a client; answers its session folder. */
   createVideo(clientPath: string, name: string): Promise<Result<string>>
+  /** Renames a client or video folder on disk; its sessions and conversations go with it. Answers the new path. */
+  renameFolder(folder: string, name: string): Promise<Result<string>>
   onMenu(listener: (command: MenuCommand) => void): () => void
   /** Whether the window is pinned on top of every other window. */
   onTop(): Promise<boolean>

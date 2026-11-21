@@ -1246,3 +1246,22 @@ button.danger:hover:not(:disabled) {
   gap: 6px;
   align-items: center;
 }
+
+/* Rename a video folder */
+
+.rename-folder {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  color: var(--muted);
+  background: transparent;
+  border-color: transparent;
+  opacity: 0;
+}
+
+.video-head:hover .rename-folder,
+.rename-folder:focus-visible {
+  opacity: 1;
+}

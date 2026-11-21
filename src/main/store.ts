@@ -3,7 +3,8 @@
 // names you gave conversations, by Claude Code's session id). Written atomically. names.json is re-read on demand: the background host writes it too.
 
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { join, sep } from 'node:path'
+import type { Move } from './moves'
 
 export async function writeJson(path: string, value: unknown): Promise<void> {
   const tmp = `${path}.${process.pid}.tmp`
@@ -30,6 +31,9 @@ export class Store {
   private sessionFolder = DEFAULT_SESSION_FOLDER
   private hidden: string[] = []
   private onTop = false
+  /** Renamed folders, oldest first, and each watched folder's identity (`dev:inode` → path). */
+  private moves: Move[] = []
+  private known: Record<string, string> = {}
   private names = new Map<string, string>()
 
   constructor(private readonly home: string) {}
@@ -44,6 +48,39 @@ export class Store {
     // A fresh install watches nothing until you choose your clients' folder.
     else await this.saveConfig()
     await this.reloadNames()
+    const folders = (await readJson(join(this.home, 'folders.json'))) as { moves?: unknown; known?: unknown } | null
+    if (Array.isArray(folders?.moves)) this.moves = folders.moves.filter((m): m is Move => typeof m?.from === 'string' && typeof m?.to === 'string')
+    if (folders?.known && typeof folders.known === 'object') this.known = Object.fromEntries(Object.entries(folders.known).filter((e): e is [string, string] => typeof e[1] === 'string'))
+  }
+
+  getMoves(): Move[] {
+    return [...this.moves]
+  }
+
+  /** Records a rename; hidden folders inside it keep being hidden under the new name. */
+  async addMove(move: Move): Promise<void> {
+    this.moves = [...this.moves, move]
+    const moved = (p: string): string => (p === move.from || p.startsWith(move.from + sep) ? move.to + p.slice(move.from.length) : p)
+    const hidden = [...new Set(this.hidden.map(moved))]
+    if (hidden.join('\0') !== this.hidden.join('\0')) {
+      this.hidden = hidden
+      await this.saveConfig()
+    }
+    await this.saveFolders()
+  }
+
+  getKnown(): Record<string, string> {
+    return { ...this.known }
+  }
+
+  async setKnown(known: Record<string, string>): Promise<void> {
+    if (JSON.stringify(known) === JSON.stringify(this.known)) return
+    this.known = known
+    await this.saveFolders()
+  }
+
+  private saveFolders(): Promise<void> {
+    return writeJson(join(this.home, 'folders.json'), { moves: this.moves, known: this.known })
   }
 
   /** Reads names.json again (another process may have written it). */

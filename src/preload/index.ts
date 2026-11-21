@@ -34,6 +34,7 @@ const api: Api = {
   setHidden: (clientPath, hide) => ipcRenderer.invoke(CH.setHidden, clientPath, hide),
   createClient: (request) => ipcRenderer.invoke(CH.createClient, request),
   createVideo: (clientPath, name) => ipcRenderer.invoke(CH.createVideo, clientPath, name),
+  renameFolder: (folder, name) => ipcRenderer.invoke(CH.renameFolder, folder, name),
   onMenu: (listener) => listen(CH.menu, listener),
   onTop: () => ipcRenderer.invoke(CH.onTop),
   setOnTop: (on) => ipcRenderer.invoke(CH.setOnTop, on),
