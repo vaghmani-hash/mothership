@@ -90,6 +90,11 @@ const until = async (fn, what, ms = 8000) => {
     await win.waitForTimeout(100)
   }
 }
+// A client's buttons show when you point at its heading, as they do for you.
+const clientTool = async (client, name) => {
+  await sidebar.getByRole('button', { name: client, exact: true }).hover()
+  await sidebar.getByRole('button', { name, exact: true }).click()
+}
 const stateOf = async (label, name) => (await live(label, name).getAttribute('aria-label')) ?? ''
 const typeName = async (name) => {
   await win.getByLabel('Session name').fill(name)
@@ -106,13 +111,13 @@ try {
   check(true, 'Wren is a client, with its agency (mesa) beside it')
   check((await will.locator('.video').count()) === 0 && (await will.innerText()).includes('2 videos'), 'clients start folded, saying how many videos they have')
   await sidebar.getByRole('button', { name: 'Wren (mesa)', exact: true }).click()
-  check((await will.locator(':scope > .video').evaluateAll((els) => els.map((e) => e.getAttribute('aria-label')))).join(',') === 'Wren › Video 2,Wren › Video 10', 'its name is a dropdown: it unfolds to all its videos, "Video 2", "Video 10", in order')
+  check((await will.locator('.client-body > .video').evaluateAll((els) => els.map((e) => e.getAttribute('aria-label')))).join(',') === 'Wren › Video 2,Wren › Video 10', 'its name is a dropdown: it unfolds to all its videos, "Video 2", "Video 10", in order')
   await sidebar.getByRole('button', { name: 'Jules', exact: true }).click()
   check((await sidebar.getByRole('region', { name: /styles/ }).count()) === 0, 'folders without a script folder are not videos')
   check((await past('Jules › Video 1', 'Hype video beat cut').innerText()).includes('ago'), "Jules's past session sits under its own video, Jules › Video 1")
   check((await past('Jules › Video 1', 'Hype video beat cut').getByRole('button', { name: 'Resume' }).count()) === 1, 'with a Resume button right there')
   await sidebar.getByLabel('Find a client or project').fill('jul')
-  check((await sidebar.getByRole('region').evaluateAll((els) => els.map((e) => e.getAttribute('aria-label')))).join(',') === 'Jules', 'the search narrows the tree to Jules')
+  check((await sidebar.locator('.client-block').evaluateAll((els) => els.map((e) => e.getAttribute('aria-label')))).join(',') === 'Jules', 'the search narrows the tree to Jules')
   await sidebar.getByLabel('Find a client or project').fill('beat cut')
   check((await video('Jules › Video 1').count()) === 1 && (await video('Wren › Video 2').count()) === 0, 'and finds a video by a past session in it')
   await sidebar.getByLabel('Find a client or project').fill('')
@@ -132,6 +137,33 @@ try {
   check(true, 'Intro animations sits under Wren › Video 2, Ready')
   check((await win.locator('.session-where').innerText()).toLowerCase() === 'wren › video 2', 'the session header says WREN › VIDEO 2 above its name')
   check((await video('Wren › Video 2').innerText()).includes('1 open'), 'the video says how many are open')
+
+  // The panel: Open now on top, clients under their agency, and the keyboard gets around it.
+  const openNow = sidebar.getByRole('region', { name: 'Open now' })
+  check((await openNow.locator('.open-row').count()) === 1 && (await openNow.innerText()).includes('Intro animations') && (await openNow.innerText()).includes('Wren › Video 2'), 'Open now lists the running session with its client › video')
+  await win.getByRole('main', { name: /Session/ }).waitFor()
+  await sidebar.getByLabel('Find a client or project').fill('')
+  check((await sidebar.locator('.agency-section > .section-head').allInnerTexts()).map((t) => t.toLowerCase()).join(',') === 'mesa,other clients', 'clients sit under their agency (MESA), the rest under Other clients')
+  await win.keyboard.press('Meta+f')
+  check(await sidebar.getByLabel('Find a client or project').evaluate((el) => el === document.activeElement), '⌘F goes to the find box')
+  await win.keyboard.press('ArrowDown')
+  check((await win.evaluate(() => document.activeElement?.closest('.open-now') !== null)), '↓ from the find box goes into the list (Open now first)')
+  await win.keyboard.press('ArrowDown')
+  check((await win.evaluate(() => document.activeElement?.getAttribute('aria-label'))) === 'Wren (mesa)', '↓ moves to the next client')
+  await win.keyboard.press('ArrowLeft')
+  check((await sidebar.getByRole('button', { name: 'Wren (mesa)', exact: true }).getAttribute('aria-expanded')) === 'false', '← folds it')
+  await win.keyboard.press('ArrowRight')
+  check((await sidebar.getByRole('button', { name: 'Wren (mesa)', exact: true }).getAttribute('aria-expanded')) === 'true', '→ unfolds it')
+  await sidebar.getByRole('button', { name: 'Fold all' }).click()
+  check((await sidebar.locator('.client-toggle[aria-expanded="true"]').count()) === 0, 'Fold all folds every client')
+  await sidebar.getByRole('button', { name: 'Unfold all' }).click()
+  check((await sidebar.locator('.client-toggle[aria-expanded="false"]').count()) === 0, 'Unfold all unfolds them')
+  const head = sidebar.locator('.client-head').first()
+  const [nameBox, toolsBox] = await Promise.all([head.locator('.client-title').boundingBox(), head.locator('.client-tools').boundingBox()])
+  check(nameBox.x + nameBox.width <= toolsBox.x + 18, "a client's buttons never cover its name")
+  await openNow.locator('.open-row').first().click()
+  check((await win.locator('.session-where').innerText()).toLowerCase() === 'wren › video 2', 'a click in Open now shows that session')
+  await win.screenshot({ path: join(shots, 'panel.png') })
 
   await typeInTerminal('hello')
   await until(async () => (await stateOf('Wren › Video 2', 'Intro animations')).includes('Needs you'), 'needs you')
@@ -203,7 +235,7 @@ try {
   await choose.waitFor({ state: 'detached' })
 
   // A session in the client folder itself (where the client's own files are), above its videos.
-  await sidebar.getByRole('button', { name: 'New session in the Wren client folder', exact: true }).click()
+  await clientTool('Wren (mesa)', 'New session in the Wren client folder')
   await dialog.waitFor()
   check((await dialog.locator('.chosen').innerText()).includes('Wren › Client folder'), '+ Session on a client starts in the client folder: Wren › Client folder')
   await dialog.getByPlaceholder(/Automatic/).fill('Base files')
@@ -212,7 +244,7 @@ try {
   await until(async () => (await terminalText()).includes(`stub claude in ${join(root, 'mesa', 'Wren')} session`), 'client folder session')
   check(true, 'Claude runs in mesa/Wren itself')
   await until(async () => (await live('Wren › Client folder', 'Base files').count()) === 1, 'listed under the client')
-  check((await sidebar.getByRole('region', { name: 'Wren (mesa)' }).locator(':scope > .video').first().getAttribute('aria-label')) === 'Wren › Client folder', 'it is listed under Wren, as Client folder, above the videos')
+  check((await sidebar.getByRole('region', { name: 'Wren (mesa)' }).locator('.client-body > .video').first().getAttribute('aria-label')) === 'Wren › Client folder', 'it is listed under Wren, as Client folder, above the videos')
   check((await win.locator('.session-where').innerText()).toLowerCase() === 'wren › client folder', 'the header says WREN › CLIENT FOLDER')
   await win.getByRole('button', { name: 'Close', exact: true }).click()
   await live('Wren › Client folder', 'Base files').waitFor({ state: 'detached', timeout: 5000 })
@@ -237,7 +269,7 @@ try {
   check((await sidebar.getByRole('region', { name: 'Cora (mesa)' }).count()) === 1, 'the new client is in the panel')
 
   // A new video for a client: the next number.
-  await sidebar.getByRole('button', { name: 'New video for Wren', exact: true }).click()
+  await clientTool('Wren (mesa)', 'New video for Wren')
   const newVideo = win.getByRole('dialog', { name: 'New video for Wren' })
   await newVideo.waitFor()
   check((await newVideo.getByLabel('Video folder').inputValue()) === '11', '+ Video suggests the next number (11 after 2 and 10)')

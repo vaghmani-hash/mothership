@@ -1294,3 +1294,152 @@ button.danger:hover:not(:disabled) {
   width: 24px;
   padding: 0;
 }
+
+/* Left panel: Open now, agencies, clients */
+
+.sidebar-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.fold-all {
+  font-size: 12px;
+}
+
+.section-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 14px 6px 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.section-count {
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--hover);
+  letter-spacing: 0;
+}
+
+.open-now {
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.open-now .section-head {
+  margin-top: 6px;
+}
+
+.open-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 8px;
+  align-items: center;
+  padding: 5px 8px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.open-row:hover,
+.open-row:focus-visible {
+  background: var(--hover);
+  outline: none;
+}
+
+.open-row[aria-current='true'] {
+  background: var(--card);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.open-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.open-where {
+  grid-column: 2;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.open-row.is-needs-you .open-where {
+  color: var(--needs);
+}
+
+/* A client: its full name, readable; its buttons come in over the count on hover. */
+.agency-section .client-block {
+  padding: 2px 0;
+}
+
+.agency-section .client-block + .client-block {
+  border-top: 0;
+}
+
+.client-block .client-head {
+  position: relative;
+  margin: 0;
+}
+
+.client-block .client-title {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.client-block.is-running .client-title {
+  color: var(--text);
+}
+
+.client-block .client-head .client-tools {
+  position: absolute;
+  top: 50%;
+  right: 2px;
+  transform: translateY(-50%);
+  padding-left: 18px;
+  background: linear-gradient(to right, transparent, var(--panel) 16px);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.client-block .client-head:hover .client-tools,
+.client-block .client-head .client-tools:focus-within {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.client-block .client-head:hover .client-toggle {
+  background: transparent;
+}
+
+.client-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.client-body {
+  padding: 2px 0 8px 14px;
+}
+
+.session-row:focus-visible,
+.resume-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.client-block .client-toggle .client-sub {
+  margin-left: auto;
+}

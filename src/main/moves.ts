@@ -22,9 +22,19 @@ export const inside = (path: string, folder: string): boolean => path === folder
 
 /** `path`, as something that started at `since` (ms) remembers it, read through the renames since. */
 export function applyMoves(path: string, moves: readonly Move[], since: number): string {
+  return followMoves(path, moves, since).path
+}
+
+/** The same, and whether any rename touched it (it may be back at its first name after a few). */
+function followMoves(path: string, moves: readonly Move[], since: number): { path: string; renamed: boolean } {
   let now = path
-  for (const m of moves) if (m.at > since && inside(now, m.from)) now = m.to + now.slice(m.from.length)
-  return now
+  let renamed = false
+  for (const m of moves)
+    if (m.at > since && inside(now, m.from)) {
+      now = m.to + now.slice(m.from.length)
+      renamed = true
+    }
+  return { path: now, renamed }
 }
 
 /**
@@ -80,9 +90,10 @@ export async function moveConversations(transcripts: string, moves: readonly Mov
         const info = await stat(join(source, name)).catch(() => null)
         const head = info ? await headOf(join(source, name), info.size).catch(() => null) : null
         if (!head?.cwd) continue
-        const now = applyMoves(head.cwd, moves, head.startedAt ?? 0)
-        const target = join(transcripts, claudeProjectDir(now))
-        if (now === head.cwd || target === source) continue
+        // Only a conversation a rename touched: one resumed in another folder stays where Claude put it.
+        const now = followMoves(head.cwd, moves, head.startedAt ?? 0)
+        const target = join(transcripts, claudeProjectDir(now.path))
+        if (!now.renamed || target === source) continue
         const id = name.slice(0, -'.jsonl'.length)
         if (busy.has(id)) {
           waiting++

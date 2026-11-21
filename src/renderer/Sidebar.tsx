@@ -1,10 +1,12 @@
-// The left panel: one block per client, and in it each video with everything about that video in
-// one place: its open sessions, its latest past ones (Resume), and + New. A video with nothing open
-// or past stays one line. Sessions in folders outside every project come last, under Other folders.
+// The left panel: Open now (every running session, one click away), then the clients under their
+// agency, and in each client its videos with everything about a video in one place: its open
+// sessions, its latest past ones (Resume), and + New. A video with nothing open or past stays one
+// line. Sessions in folders outside every project come last, under Other folders. ↑ ↓ → ← and ⌘F
+// get around it from the keyboard.
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { displayName, sessionName } from '../shared/names'
-import { clientFolderOf, clientFolderTitle, clientsOf, groupByProject, OTHER, projectOf } from '../shared/projects'
+import { clientFolderOf, clientFolderTitle, clientsOf, groupByProject, OTHER, projectLabel, projectOf } from '../shared/projects'
 import type { HistoryEntry, LiveSession, Project } from '../shared/types'
 import { FoldersPanel } from './FoldersPanel'
 import { EditableName, StateDot, STATE_LABEL, useNow } from './parts'
@@ -142,6 +144,7 @@ export function Sidebar({ sessions, projects, roots, selected, page, onSelect, o
       key={s.id}
       role="button"
       tabIndex={0}
+      data-nav=""
       aria-label={`${sessionName(s)}, ${STATE_LABEL[s.state]}`}
       aria-current={page === 'session' && selected === s.id ? 'true' : undefined}
       className={`session-row is-${s.state}`}
@@ -176,7 +179,7 @@ export function Sidebar({ sessions, projects, roots, selected, page, onSelect, o
         <EditableName className="past-name" shown={displayName(e)} own={e.name} onSave={(name) => onRename(e.claudeId, name)} />
         <span className="past-when">{ago(e.lastAt, now)} ago</span>
       </span>
-      <button className="resume-button" onClick={() => onResume(e)} title={`Continue this conversation in ${e.cwd}`}>
+      <button className="resume-button" data-nav="" onClick={() => onResume(e)} title={`Continue this conversation in ${e.cwd}`}>
         Resume
       </button>
       <button className="delete-button" onClick={() => onDelete(e.claudeId, displayName(e))} title="Delete this conversation (to the Trash)" aria-label={`Delete ${displayName(e)}`}>
@@ -185,98 +188,226 @@ export function Sidebar({ sessions, projects, roots, selected, page, onSelect, o
     </div>
   )
 
+  // Running sessions, the ones that need you first: one click from anywhere in the list.
+  const STATE_ORDER: Record<string, number> = { 'needs-you': 0, working: 1, ready: 2 }
+  const openNow = sessions
+    .filter((s) => s.state !== 'ended')
+    .slice()
+    .sort((a, b) => (STATE_ORDER[a.state] ?? 3) - (STATE_ORDER[b.state] ?? 3) || projectLabel(a.cwd, projects, roots).localeCompare(projectLabel(b.cwd, projects, roots)) || a.seq - b.seq)
+
+  // Clients under their agency (mesa, Dawn Media…), agencies by name, clients with none last.
+  const sections = [...new Set(shownClients.map((c) => c.agency ?? ''))]
+    .sort((a, b) => (a === '' ? 1 : b === '' ? -1 : a.localeCompare(b, undefined, { sensitivity: 'base' })))
+    .map((agency) => ({ key: agency || '\u0000', title: agency || (shownClients.some((c) => c.agency) ? 'Other clients' : 'Clients'), clients: shownClients.filter((c) => (c.agency ?? '') === agency) }))
+  const anyOpen = shownClients.some(isOpen)
+  const foldAll = (): void => {
+    const next = { ...folds }
+    for (const c of shownClients) next[c.key] = !anyOpen
+    setFolds(next)
+    saveFolds(next)
+  }
+
+  // ↑ ↓ move through clients and sessions, → / ← unfold and fold a client (← from inside goes to it).
+  const tree = useRef<HTMLDivElement>(null)
+  const moveFocus = (e: React.KeyboardEvent<HTMLDivElement>): void => {
+    const target = e.target as HTMLElement
+    if (!target.matches('[data-nav]') || !tree.current) return
+    const items = [...tree.current.querySelectorAll<HTMLElement>('[data-nav]')].filter((el) => el.offsetParent !== null)
+    const at = items.indexOf(target)
+    const go = (i: number): void => {
+      items[Math.max(0, Math.min(items.length - 1, i))]?.focus()
+      e.preventDefault()
+    }
+    if (e.key === 'ArrowDown') go(at + 1)
+    else if (e.key === 'ArrowUp') go(at - 1)
+    else if (e.key === 'Home') go(0)
+    else if (e.key === 'End') go(items.length - 1)
+    else if (e.key === 'ArrowLeft' && !target.classList.contains('client-toggle')) {
+      const head = target.closest('.client-block')?.querySelector<HTMLElement>('.client-toggle')
+      if (head) {
+        head.focus()
+        e.preventDefault()
+      }
+    }
+  }
+  // ⌘F finds; Esc in the box clears it.
+  const search = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    const find = (e: KeyboardEvent): void => {
+      if (e.metaKey && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'f') {
+        e.preventDefault()
+        search.current?.focus()
+        search.current?.select()
+      }
+    }
+    window.addEventListener('keydown', find, true)
+    return () => window.removeEventListener('keydown', find, true)
+  }, [])
+
+  const clientBlock = (c: (typeof shownClients)[number]): React.JSX.Element => {
+    const open = isOpen(c)
+    const running = c.projects.reduce((n, p) => n + (openIn.get(p.path)?.length ?? 0), 0) + liveAtClient(c.key)
+    const label = c.agency ? `${c.client} (${c.agency})` : c.client
+    return (
+      <section key={c.key} className={`client-block${open ? ' is-open' : ''}${hiddenSet.has(c.key) ? ' is-hidden' : ''}${running > 0 ? ' is-running' : ''}`} aria-label={label}>
+        <h3 className="client-head" title={c.key}>
+          <button
+            className="client-toggle"
+            data-nav=""
+            aria-expanded={open}
+            aria-label={label}
+            onClick={() => toggle(c)}
+            onKeyDown={(e) => {
+              if ((e.key === 'ArrowRight' && !open) || (e.key === 'ArrowLeft' && open)) {
+                e.preventDefault()
+                e.stopPropagation()
+                toggle(c)
+              }
+            }}
+          >
+            <span className="twisty" aria-hidden="true">
+              {open ? '▾' : '▸'}
+            </span>
+            <span className="client-title">{c.client}</span>
+            {hiddenSet.has(c.key) && <span className="hidden-tag" title="Hidden; shown while a session runs in it">hidden</span>}
+            {running > 0 ? (
+              <span className="video-count">{running} open</span>
+            ) : (
+              <span className="client-sub">
+                {c.projects.length} {c.projects.length === 1 ? 'video' : 'videos'}
+              </span>
+            )}
+          </button>
+          <span className="client-tools">
+            <button className="client-tool icon-tool" aria-label={`New session in the ${c.client} client folder`} title={`New session in the client folder itself (${c.key})`} onClick={() => onNew(c.key)}>
+              <TerminalIcon />
+            </button>
+            <button className="client-tool icon-tool" aria-label={`Rename the ${c.client} folder`} title={`Rename the folder ${c.key}`} onClick={() => onRenameFolder({ label: c.client, folder: c.key })}>
+              <PencilIcon />
+            </button>
+            <button className="client-tool icon-tool" aria-label={`New video for ${c.client}`} title={`New video: a new video folder in ${c.key}`} onClick={() => onNewVideo({ client: c.client, clientPath: c.key, existing: clientsOf(projects).find((x) => x.key === c.key)?.projects.map((p) => p.name) ?? [] })}>
+              <PlusIcon />
+            </button>
+          </span>
+        </h3>
+        {open && (
+          <div className="client-body">
+            {clientGroups(c.key).map((g) => {
+              const past = g.past.slice(0, g.live.length > 0 ? PAST_WITH_OPEN : PAST_ALONE)
+              return (
+                <div key={g.folder} className={`video client-folder${g.live.length > 0 ? ' is-busy' : ''}${past.length > 0 ? ' has-past' : ''}`} role="group" aria-label={`${c.client} › ${g.title}`}>
+                  <div className="video-head" title={g.folder}>
+                    <span className="video-title">{g.title}</span>
+                    {g.live.length > 0 && <span className="video-count">{g.live.length} open</span>}
+                    <button className="new-here" aria-label={`New session in ${c.client} › ${g.title}`} title={`Start Claude in ${g.folder}`} onClick={() => onNew(g.folder)}>
+                      + New
+                    </button>
+                  </div>
+                  {[...g.live].sort((a, b) => a.seq - b.seq).map(sessionRow)}
+                  {past.map(pastRow)}
+                </div>
+              )
+            })}
+            {c.projects.map((p) => {
+              const live = openIn.get(p.path) ?? []
+              const past = (pastIn.get(p.path) ?? []).slice(0, live.length > 0 ? PAST_WITH_OPEN : PAST_ALONE)
+              const busy = live.length > 0
+              return (
+                <div key={p.path} className={`video${busy ? ' is-busy' : ''}${past.length > 0 ? ' has-past' : ''}`} role="group" aria-label={`${c.client} › ${p.title}`}>
+                  <div className="video-head" title={p.sessionDir}>
+                    <span className="video-title">{p.title}</span>
+                    {busy && <span className="video-count">{live.length} open</span>}
+                    <button className="rename-folder" aria-label={`Rename the ${c.client} › ${p.title} folder`} title={`Rename ${p.path}`} onClick={() => onRenameFolder({ label: `${c.client} › ${p.title}`, folder: p.path })}>
+                      <PencilIcon />
+                    </button>
+                    <button className="new-here" aria-label={`New session in ${c.client} › ${p.title}`} title={`Start Claude in ${p.sessionDir}`} onClick={() => onNew(p.sessionDir)}>
+                      + New
+                    </button>
+                  </div>
+                  {live.map(sessionRow)}
+                  {past.map(pastRow)}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </section>
+    )
+  }
+
   return (
     <nav className="sidebar" aria-label="Clients and sessions">
       <div className="sidebar-top">
         <button className="primary new-button" onClick={() => onNew()} title="New session (⌘N)">
           + New session
         </button>
-        <input className="sidebar-search" type="search" placeholder="Find a client, video or session" aria-label="Find a client or project" value={query} onChange={(e) => setQuery(e.target.value)} />
+        <input
+          ref={search}
+          className="sidebar-search"
+          type="search"
+          placeholder="Find a client, video or session (⌘F)"
+          aria-label="Find a client or project"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              setQuery('')
+              e.currentTarget.blur()
+            }
+            // ↓ from the box goes into the list.
+            if (e.key === 'ArrowDown') {
+              e.preventDefault()
+              tree.current?.querySelector<HTMLElement>('[data-nav]')?.focus()
+            }
+          }}
+        />
         <div className="sidebar-summary">
-          {sessions.length === 0 ? 'No sessions open' : `${sessions.length} open`}
-          {waiting > 0 && <span className="heading-needs"> · {waiting} need{waiting === 1 ? 's' : ''} you</span>}
+          <span>
+            {sessions.length === 0 ? 'No sessions open' : `${sessions.length} open`}
+            {waiting > 0 && <span className="heading-needs"> · {waiting} need{waiting === 1 ? 's' : ''} you</span>}
+          </span>
+          {shownClients.length > 0 && words.length === 0 && (
+            <button className="link-button fold-all" onClick={foldAll} title={anyOpen ? 'Fold every client' : 'Unfold every client'}>
+              {anyOpen ? 'Fold all' : 'Unfold all'}
+            </button>
+          )}
         </div>
       </div>
 
-      <div className="panel-scroll">
+      <div className="panel-scroll" ref={tree} onKeyDown={moveFocus}>
         {projects.length === 0 && <p className="panel-empty">No videos found. A video is a folder with a “script” folder inside, under a watched folder.</p>}
         {projects.length > 0 && shownClients.length === 0 && others.length === 0 && <p className="panel-empty">{words.length > 0 ? 'Nothing matches.' : 'Every folder is hidden.'}</p>}
-        {shownClients.map((c) => {
-          const open = isOpen(c)
-          const running = c.projects.reduce((n, p) => n + (openIn.get(p.path)?.length ?? 0), 0) + liveAtClient(c.key)
-          const label = c.agency ? `${c.client} (${c.agency})` : c.client
-          return (
-            <section key={c.key} className={`client-block${open ? ' is-open' : ''}${hiddenSet.has(c.key) ? ' is-hidden' : ''}`} aria-label={label}>
-              <h2 className="client-head" title={c.key}>
-                <button className="client-toggle" aria-expanded={open} aria-label={label} onClick={() => toggle(c)}>
-                  <span className="twisty" aria-hidden="true">
-                    {open ? '▾' : '▸'}
-                  </span>
-                  <span className="client-title">{c.client}</span>
-                  {c.agency && <span className="agency">{c.agency}</span>}
-                  {hiddenSet.has(c.key) && <span className="hidden-tag" title="Hidden; shown while a session runs in it">hidden</span>}
-                  {running > 0 ? (
-                    <span className="video-count">{running} open</span>
-                  ) : (
-                    <span className="client-sub">
-                      {c.projects.length} {c.projects.length === 1 ? 'video' : 'videos'}
-                    </span>
-                  )}
-                </button>
-                <span className="client-tools">
-                  <button className="client-tool" aria-label={`New session in the ${c.client} client folder`} title={`Start Claude in the client folder itself: ${c.key}`} onClick={() => onNew(c.key)}>
-                    + Session
-                  </button>
-                  <button className="client-tool icon-tool" aria-label={`Rename the ${c.client} folder`} title={`Rename the folder ${c.key}`} onClick={() => onRenameFolder({ label: c.client, folder: c.key })}>
-                    <PencilIcon />
-                  </button>
-                  <button className="client-tool" aria-label={`New video for ${c.client}`} title={`A new video folder in ${c.key}`} onClick={() => onNewVideo({ client: c.client, clientPath: c.key, existing: clientsOf(projects).find((x) => x.key === c.key)?.projects.map((p) => p.name) ?? [] })}>
-                    + Video
-                  </button>
-                </span>
-              </h2>
-              {open &&
-                clientGroups(c.key).map((g) => {
-                  const past = g.past.slice(0, g.live.length > 0 ? PAST_WITH_OPEN : PAST_ALONE)
-                  return (
-                    <div key={g.folder} className={`video client-folder${g.live.length > 0 ? ' is-busy' : ''}${past.length > 0 ? ' has-past' : ''}`} role="group" aria-label={`${c.client} › ${g.title}`}>
-                      <div className="video-head" title={g.folder}>
-                        <span className="video-title">{g.title}</span>
-                        {g.live.length > 0 && <span className="video-count">{g.live.length} open</span>}
-                        <button className="new-here" aria-label={`New session in ${c.client} › ${g.title}`} title={`Start Claude in ${g.folder}`} onClick={() => onNew(g.folder)}>
-                          + New
-                        </button>
-                      </div>
-                      {[...g.live].sort((a, b) => a.seq - b.seq).map(sessionRow)}
-                      {past.map(pastRow)}
-                    </div>
-                  )
-                })}
-              {open &&
-                c.projects.map((p) => {
-                  const live = openIn.get(p.path) ?? []
-                  const past = (pastIn.get(p.path) ?? []).slice(0, live.length > 0 ? PAST_WITH_OPEN : PAST_ALONE)
-                  const busy = live.length > 0
-                  return (
-                    <div key={p.path} className={`video${busy ? ' is-busy' : ''}${past.length > 0 ? ' has-past' : ''}`} role="group" aria-label={`${c.client} › ${p.title}`}>
-                      <div className="video-head" title={p.sessionDir}>
-                        <span className="video-title">{p.title}</span>
-                        {busy && <span className="video-count">{live.length} open</span>}
-                        <button className="rename-folder" aria-label={`Rename the ${c.client} › ${p.title} folder`} title={`Rename ${p.path}`} onClick={() => onRenameFolder({ label: `${c.client} › ${p.title}`, folder: p.path })}>
-                          <PencilIcon />
-                        </button>
-                        <button className="new-here" aria-label={`New session in ${c.client} › ${p.title}`} title={`Start Claude in ${p.sessionDir}`} onClick={() => onNew(p.sessionDir)}>
-                          + New
-                        </button>
-                      </div>
-                      {live.map(sessionRow)}
-                      {past.map(pastRow)}
-                    </div>
-                  )
-                })}
-            </section>
-          )
-        })}
+        {openNow.length > 0 && words.length === 0 && (
+          <section className="open-now" aria-label="Open now">
+            <h2 className="section-head">
+              Open now <span className="section-count">{openNow.length}</span>
+            </h2>
+            {openNow.map((s) => (
+              <div
+                key={s.id}
+                role="button"
+                tabIndex={0}
+                data-nav=""
+                className={`open-row is-${s.state}`}
+                aria-label={`Open ${sessionName(s)} in ${projectLabel(s.cwd, projects, roots)}, ${STATE_LABEL[s.state]}`}
+                aria-current={page === 'session' && selected === s.id ? 'true' : undefined}
+                title={s.state === 'needs-you' && s.reason ? `Needs you: ${s.reason}` : STATE_LABEL[s.state]}
+                onClick={() => onSelect(s.id)}
+                onKeyDown={(e) => e.key === 'Enter' && onSelect(s.id)}
+              >
+                <StateDot state={s.state} />
+                <span className="open-name">{sessionName(s)}</span>
+                <span className="open-where">{projectLabel(s.cwd, projects, roots)}</span>
+              </div>
+            ))}
+          </section>
+        )}
+        {sections.map((section) => (
+          <section key={section.key} className="agency-section" aria-label={section.title}>
+            {sections.length > 1 && <h2 className="section-head">{section.title}</h2>}
+            {section.clients.map(clientBlock)}
+          </section>
+        ))}
         {others.length > 0 && (
           <section className="client-block" aria-label={OTHER}>
             <h2 className="client-head">
@@ -330,6 +461,23 @@ function PencilIcon(): React.JSX.Element {
   return (
     <svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true">
       <path d="M11 2.5l2.5 2.5L6 12.5H3.5V10L11 2.5zM9.5 4l2.5 2.5" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function TerminalIcon(): React.JSX.Element {
+  return (
+    <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true">
+      <rect x="1.5" y="2.5" width="13" height="11" rx="2" fill="none" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M4.5 6l2 2-2 2M8 10.5h3.5" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function PlusIcon(): React.JSX.Element {
+  return (
+    <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M8 3v10M3 8h10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
     </svg>
   )
 }

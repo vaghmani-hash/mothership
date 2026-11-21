@@ -71,6 +71,28 @@ describe('renamed folders', () => {
     expect(await readFile(join(at(`${M}/rough cut/script`), 'old0000.jsonl'), 'utf8')).toBe(line(`${M}/video 3/script`, 'old0000', 0))
   })
 
+  it('moves a conversation whose folder was renamed away and back to its first name', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'cs-moves-'))
+    const at = (cwd: string) => join(dir, claudeProjectDir(cwd))
+    // Started in video 3; its folder became "rough cut", then "video 2", then "video 3" again
+    // (after the old video 3 became video 4): its transcript sits under "rough cut".
+    const trip = [
+      { from: `${M}/video 3`, to: `${M}/rough cut`, at: T(1) },
+      { from: `${M}/rough cut`, to: `${M}/video 2`, at: T(5) },
+      { from: `${M}/video 3`, to: `${M}/video 4`, at: T(6) },
+      { from: `${M}/video 2`, to: `${M}/video 3`, at: T(7) }
+    ]
+    await mkdir(at(`${M}/rough cut/script`), { recursive: true })
+    await writeFile(join(at(`${M}/rough cut/script`), 'old0000.jsonl'), JSON.stringify({ type: 'user', cwd: `${M}/video 3/script`, message: { content: 'hi' }, timestamp: new Date(T(0)).toISOString() }) + '\n')
+    // Resumed in another folder, never renamed: Claude keeps it under that folder, and so do we.
+    await mkdir(at('/c/elsewhere/script'), { recursive: true })
+    await writeFile(join(at('/c/elsewhere/script'), 'away1111.jsonl'), JSON.stringify({ type: 'user', cwd: '/c/first/script', message: { content: 'hi' }, timestamp: new Date(T(0)).toISOString() }) + '\n')
+    expect(applyMoves(`${M}/video 3/script`, trip, T(0))).toBe(`${M}/video 3/script`)
+    expect(await moveConversations(dir, trip)).toEqual({ moved: 1, waiting: 0 })
+    expect(await readdir(at(`${M}/video 3/script`))).toEqual(['old0000.jsonl'])
+    expect(await readdir(at('/c/elsewhere/script'))).toEqual(['away1111.jsonl'])
+  })
+
   it('keeps renames in folders.json and moves hidden folders with them', async () => {
     const home = await mkdtemp(join(tmpdir(), 'cs-moves-store-'))
     const store = new Store(home)
